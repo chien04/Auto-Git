@@ -1,0 +1,453 @@
+import React, { useState, useEffect } from 'react';
+import StudentList from './StudentList';
+
+interface TeacherDashboardProps {
+  vscode: any;
+  user: any;
+}
+
+interface ClassItem {
+  classId: string;
+  className: string;
+  classCode: string;
+  repoUrl: string;
+  studentCount: number;
+}
+
+interface Student {
+  studentId: string;
+  studentName: string;
+  branchName: string;
+  commitCount: number;
+  lastCommitAt: string | null;
+  joinedAt: string;
+}
+
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [viewStudentList, setViewStudentList] = useState(false);
+
+  useEffect(() => {
+    // Listen for messages from extension
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      switch (message.type) {
+        case 'classesLoaded':
+          setClasses(message.classes);
+          break;
+        case 'studentsLoaded':
+          setStudents(message.students);
+          break;
+        case 'classCreated':
+          vscode.postMessage({ type: 'loadMyClasses' });
+          setShowCreateForm(false);
+          break;
+        case 'classDeleted':
+          vscode.postMessage({ type: 'loadMyClasses' });
+          setSelectedClass(null);
+          setStudents([]);
+          break;
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    
+    // Load classes on mount
+    vscode.postMessage({ type: 'loadMyClasses' });
+
+    return () => window.removeEventListener('message', handleMessage);
+  }, [vscode]);
+
+  const handleViewStudents = (classItem: ClassItem) => {
+    setSelectedClass(classItem);
+    setViewStudentList(false); // Don't use StudentList component
+    // Auto sync workspace when viewing class details
+    vscode.postMessage({ type: 'syncWorkspace', classCode: classItem.classCode });
+    vscode.postMessage({ type: 'loadStudents', classCode: classItem.classCode });
+    // Open folder when viewing class details
+    vscode.postMessage({ type: 'openClassFolder', classCode: classItem.classCode });
+  };
+
+  const handleSyncWorkspace = (classCode: string) => {
+    vscode.postMessage({ type: 'syncWorkspace', classCode });
+  };
+
+  const handleDeleteClass = (classItem: ClassItem) => {
+    console.log('Delete button clicked for class:', classItem);
+    console.log('Sending deleteClass message:', classItem.classCode);
+    vscode.postMessage({ 
+      type: 'deleteClass', 
+      classCode: classItem.classCode,
+      className: classItem.className 
+    });
+  };
+
+  if (showCreateForm) {
+    return (
+      <div style={styles.container}>
+        <button 
+          onClick={() => {
+            setShowCreateForm(false);
+            vscode.postMessage({ type: 'loadMyClasses' });
+          }} 
+          style={styles.backButton}
+        >
+          ←
+        </button>
+        <TeacherForm vscode={vscode} />
+      </div>
+    );
+  }
+
+  if (selectedClass && viewStudentList) {
+    return (
+      <StudentList 
+        vscode={vscode} 
+        classItem={selectedClass}
+        currentUser={user}
+        userRole="TEACHER"
+        onBack={() => {
+          setViewStudentList(false);
+          setSelectedClass(null);
+        }}
+      />
+    );
+  }
+
+  if (selectedClass) {
+    return (
+      <div style={styles.container}>
+        <button onClick={() => setSelectedClass(null)} style={styles.backButton}>
+          ←
+        </button>
+        
+        <div style={styles.classHeader}>
+          <div>
+            <h2 style={styles.className}>{selectedClass.className}</h2>
+            <p style={styles.classCode}>Mã lớp: <strong>{selectedClass.classCode}</strong></p>
+          </div>
+          <div style={styles.classActions}>
+            <button 
+              onClick={() => handleSyncWorkspace(selectedClass.classCode)}
+              style={styles.syncButton}
+            >
+              🔄 Làm mới code
+            </button>
+            <button 
+              onClick={() => handleDeleteClass(selectedClass)}
+              style={styles.deleteButton}
+            >
+              Xóa lớp học
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.studentList}>
+          <h3 style={styles.sectionTitle}>
+            Danh sách sinh viên ({students.length})
+          </h3>
+          {students.length === 0 ? (
+            <p style={styles.emptyText}>Chưa có sinh viên nào tham gia</p>
+          ) : (
+            <div style={styles.table}>
+              {students.map((student) => (
+                <div key={student.studentId} style={styles.studentCard}>
+                  <div style={styles.studentInfo}>
+                    <div style={styles.studentName}>{student.studentName}</div>
+                    <div style={styles.studentDetail}>Branch: {student.branchName}</div>
+                    <div style={styles.studentDetail}>
+                      Commits: {student.commitCount} | 
+                      Tham gia: {new Date(student.joinedAt).toLocaleDateString('vi-VN')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h2 style={styles.title}>Lớp học của tôi</h2>
+        <button onClick={() => setShowCreateForm(true)} style={styles.createButton}>
+          + Tạo lớp mới
+        </button>
+      </div>
+
+      {classes.length === 0 ? (
+        <div style={styles.empty}>
+          <p style={styles.emptyText}>Bạn chưa tạo lớp học nào</p>
+          <button onClick={() => setShowCreateForm(true)} style={styles.createButtonLarge}>
+            + Tạo lớp học đầu tiên
+          </button>
+        </div>
+      ) : (
+        <div style={styles.classList}>
+          {classes.map((classItem) => (
+            <div key={classItem.classId} style={styles.classCard}>
+              <div style={styles.cardHeader}>
+                <h3 style={styles.cardTitle}>{classItem.className}</h3>
+                <div style={styles.cardActions}>
+                  <button
+                    onClick={() => handleDeleteClass(classItem)}
+                    style={styles.deleteButton}
+                    title="Xóa lớp"
+                  >
+                    Xóa lớp học
+                  </button>
+                </div>
+              </div>
+              <div style={styles.cardBody}>
+                <p style={styles.cardInfo}>
+                  <strong>Mã lớp:</strong> {classItem.classCode}
+                </p>
+                <p style={styles.cardInfo}>
+                  <strong>Sinh viên:</strong> {classItem.studentCount}
+                </p>
+                <button
+                  onClick={() => handleViewStudents(classItem)}
+                  style={styles.viewButton}
+                >
+                  Xem chi tiết →
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Import TeacherForm from existing file
+import TeacherForm from './TeacherForm';
+
+const styles = {
+  container: {
+    padding: '24px',
+    backgroundColor: '#fafafa',
+    minHeight: '100vh',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '32px',
+  },
+  title: {
+    fontSize: '28px',
+    fontWeight: '700',
+    margin: 0,
+    color: '#000',
+    letterSpacing: '-0.5px',
+  },
+  createButton: {
+    padding: '12px 24px',
+    backgroundColor: '#000',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  classList: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+    gap: '16px',
+  },
+  classCard: {
+    backgroundColor: '#fff',
+    border: '1px solid #dbdbdb',
+    borderRadius: '16px',
+    padding: '24px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    transition: 'all 0.15s ease',
+  },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '16px',
+  },
+  cardTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    margin: 0,
+    flex: 1,
+    color: '#262626',
+    letterSpacing: '-0.2px',
+  },
+  cardActions: {
+    display: 'flex',
+    gap: '8px',
+  },
+  cardBody: {
+    marginTop: '12px',
+  },
+  cardInfo: {
+    fontSize: '13px',
+    margin: '8px 0',
+    color: '#8e8e8e',
+    fontWeight: '400',
+  },
+  viewButton: {
+    marginTop: '16px',
+    padding: '12px',
+    backgroundColor: '#000',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    width: '100%',
+    fontWeight: '600',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  empty: {
+    textAlign: 'center' as const,
+    padding: '80px 20px',
+  },
+  emptyText: {
+    fontSize: '15px',
+    color: '#8e8e8e',
+    marginBottom: '24px',
+    fontWeight: '400',
+  },
+  createButtonLarge: {
+    padding: '14px 32px',
+    backgroundColor: '#000',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontSize: '15px',
+    fontWeight: '600',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  backButton: {
+    padding: '10px 20px',
+    backgroundColor: '#fff',
+    color: '#262626',
+    border: '1px solid #dbdbdb',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    marginBottom: '24px',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  classHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '32px',
+  },
+  className: {
+    fontSize: '28px',
+    fontWeight: '700',
+    margin: '0 0 8px 0',
+    color: '#000',
+    letterSpacing: '-0.5px',
+  },
+  classCode: {
+    fontSize: '14px',
+    color: '#8e8e8e',
+    margin: 0,
+    fontWeight: '400',
+  },
+  deleteButton: {
+    padding: '12px 24px',
+    backgroundColor: '#fff',
+    color: '#262626',
+    border: '1px solid #dbdbdb',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  classActions: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+  },
+  workspaceButton: {
+    padding: '12px 24px',
+    backgroundColor: '#0066FF',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  syncButton: {
+    padding: '12px 24px',
+    backgroundColor: '#10B981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '14px',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+    marginLeft: '12px',
+  },
+  studentList: {
+    marginTop: '24px',
+  },
+  sectionTitle: {
+    fontSize: '20px',
+    fontWeight: '600',
+    marginBottom: '20px',
+    color: '#262626',
+    letterSpacing: '-0.3px',
+  },
+  table: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '12px',
+  },
+  studentCard: {
+    backgroundColor: '#fff',
+    border: '1px solid #dbdbdb',
+    borderRadius: '16px',
+    padding: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+  },
+  studentInfo: {
+    flex: 1,
+  },
+  studentName: {
+    fontSize: '16px',
+    fontWeight: '600',
+    marginBottom: '8px',
+    color: '#262626',
+  },
+  studentDetail: {
+    fontSize: '13px',
+    color: '#8e8e8e',
+    marginBottom: '4px',
+    fontWeight: '400',
+  },
+};
+
+export default TeacherDashboard;
