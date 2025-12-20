@@ -46,6 +46,10 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
         case 'commitsLoaded':
           setCommits(message.commits || []);
           break;
+        case 'studentRemoved':
+          // Reload students after removal
+          vscode.postMessage({ type: 'loadStudents', classCode: classItem.classCode });
+          break;
       }
     };
 
@@ -184,20 +188,38 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                 {student.studentName}
               </h3>
               {userRole === 'TEACHER' && (
-                <div style={styles.studentInfo}>
-                  <p style={styles.infoItem}>
-                    <span style={styles.label}>Branch:</span> {student.branchName}
-                  </p>
-                  <p style={styles.infoItem}>
-                    <span style={styles.label}>Commits:</span> {student.commitCount}
-                  </p>
-                  {student.lastCommitAt && (
+                <>
+                  <div style={styles.studentInfo}>
                     <p style={styles.infoItem}>
-                      <span style={styles.label}>Commit cuối:</span>{' '}
-                      {new Date(student.lastCommitAt).toLocaleDateString('vi-VN')}
+                      <span style={styles.label}>Branch:</span> {student.branchName}
                     </p>
-                  )}
-                </div>
+                    <p style={styles.infoItem}>
+                      <span style={styles.label}>Commits:</span> {student.commitCount}
+                    </p>
+                    {student.lastCommitAt && (
+                      <p style={styles.infoItem}>
+                        <span style={styles.label}>Commit cuối:</span>{' '}
+                        {new Date(student.lastCommitAt).toLocaleDateString('vi-VN')}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Xóa sinh viên ${student.studentName} khỏi lớp?`)) {
+                        vscode.postMessage({
+                          type: 'removeStudent',
+                          classCode: classItem.classCode,
+                          studentId: student.studentId,
+                          studentName: student.studentName
+                        });
+                      }
+                    }}
+                    style={styles.removeButton}
+                  >
+                    Xóa
+                  </button>
+                </>
               )}
             </div>
           );
@@ -305,6 +327,20 @@ const styles = {
   label: {
     color: '#8e8e8e',
     fontWeight: '500',
+  },
+  removeButton: {
+    width: '100%',
+    marginTop: '12px',
+    padding: '10px',
+    backgroundColor: '#fff',
+    color: '#ed4956',
+    border: '1px solid #ed4956',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    outline: 'none',
   },
   commitList: {
     display: 'flex',

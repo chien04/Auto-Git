@@ -4,6 +4,7 @@ import RoleSelection from './RoleSelection';
 import TeacherDashboard from './TeacherDashboard';
 import StudentDashboard from './StudentDashboard';
 import UserHeader from './UserHeader';
+import { ApiService } from '../../services/apiService';
 
 interface MainAppProps {
   vscode: any;
@@ -14,6 +15,7 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   const [loading, setLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<'TEACHER' | 'STUDENT' | null>(null);
   const hasCheckedLogin = useRef(false);
+  const apiService = useRef(new ApiService()).current;
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -25,16 +27,25 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           setUser(message.user);
           setLoading(false);
           setSelectedRole(null);
+          // Set token for apiService
+          if (message.token) {
+            apiService.setToken(message.token);
+          }
           break;
         case 'logout':
           setUser(null);
           setSelectedRole(null);
           setLoading(false);
+          apiService.setToken(null);
           break;
         case 'restoreState':
           // Nhận state từ extension
           if (message.user) {
             setUser(message.user);
+          }
+          // Set token for apiService if available
+          if (message.token) {
+            apiService.setToken(message.token);
           }
           setLoading(false);
           break;
@@ -94,9 +105,9 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     <div style={styles.container}>
       <UserHeader user={user} onLogout={handleLogout} />
       {user.role === 'TEACHER' ? (
-        <TeacherDashboard vscode={vscode} user={user} />
+        <TeacherDashboard vscode={vscode} user={user} apiService={apiService} />
       ) : (
-        <StudentDashboard vscode={vscode} user={user} />
+        <StudentDashboard vscode={vscode} user={user} apiService={apiService} />
       )}
     </div>
   );

@@ -17,6 +17,8 @@ export class GitService {
     private token: string | null = null;
     private repoUrl: string | null = null;
     private branch: string | null = null;
+    private classCode: string | null = null;
+    private apiService: any = null;
 
     constructor() {}
 
@@ -218,6 +220,14 @@ export class GitService {
     }
 
     /**
+     * Set API service and class code for deadline check
+     */
+    setClassInfo(apiService: any, classCode: string): void {
+        this.apiService = apiService;
+        this.classCode = classCode;
+    }
+
+    /**
      * Enable auto-push on save
      */
     enableAutoPush(): void {
@@ -247,6 +257,26 @@ export class GitService {
         }
 
         try {
+            // Check deadline before allowing push (Student only)
+            if (this.apiService && this.classCode) {
+                try {
+                    const deadlineCheck = await this.apiService.checkDeadline(this.classCode);
+                    if (!deadlineCheck.canPush) {
+                        const deadlineStr = deadlineCheck.deadline 
+                            ? new Date(deadlineCheck.deadline).toLocaleString('vi-VN')
+                            : '';
+                        throw new Error(`⏰ Đã hết hạn nộp bài! Deadline: ${deadlineStr}`);
+                    }
+                } catch (error: any) {
+                    // If error message contains deadline info, throw it
+                    if (error.message && error.message.includes('Deadline')) {
+                        throw error;
+                    }
+                    // Otherwise, log error and continue (might be network issue)
+                    console.warn('Could not check deadline:', error.message);
+                }
+            }
+
             // Check if there are any changes
             const status = await this.git.status();
             

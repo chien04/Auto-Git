@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import StudentList from './StudentList';
+import { StudentStatsCard } from './StudentStatsCard';
+import { CommitHeatmap } from './CommitHeatmap';
 
 interface StudentDashboardProps {
   vscode: any;
   user: any;
+  apiService: any;
 }
 
 interface ClassItem {
@@ -12,9 +15,10 @@ interface ClassItem {
   classCode: string;
   repoUrl: string;
   branchName: string;
+  deadline?: string;
 }
 
-const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user }) => {
+const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiService }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
@@ -91,6 +95,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user }) => 
 
   return (
     <div style={styles.container}>
+      <StudentStatsCard apiService={apiService} />
+      
       <div style={styles.header}>
         <h2 style={styles.title}>Lớp học của tôi</h2>
         <button onClick={() => setShowJoinForm(true)} style={styles.joinButton}>
@@ -106,48 +112,70 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user }) => 
           </button>
         </div>
       ) : (
-        <div style={styles.classList}>
-          {classes.map((classItem) => (
-            <div key={classItem.classId} style={styles.classCard}>
-              <div style={styles.cardHeader}>
-                <h3 style={styles.cardTitle}>{classItem.className}</h3>
-                <button
-                  onClick={() => handleLeaveClass(classItem)}
-                  style={styles.leaveButton}
-                  title="Rời lớp"
-                >
-                  Rời lớp
-                </button>
-              </div>
-              <div style={styles.cardBody}>
-                <p style={styles.cardInfo}>
-                  <strong>Mã lớp:</strong> {classItem.classCode}
-                </p>
-                <p style={styles.cardInfo}>
-                  <strong>Branch của bạn:</strong> {classItem.branchName}
-                </p>
-                <div style={styles.cardActions}>
+        <>
+          <div style={styles.classList}>
+            {classes.map((classItem) => (
+              <div key={classItem.classId} style={styles.classCard}>
+                <div style={styles.cardHeader}>
+                  <h3 style={styles.cardTitle}>{classItem.className}</h3>
                   <button
-                    onClick={() => {
-                      setSelectedClass(classItem);
-                      // Open folder when viewing class details
-                      vscode.postMessage({ type: 'openClassFolder', classCode: classItem.classCode });
-                    }}
-                    style={styles.viewClassButton}
+                    onClick={() => handleLeaveClass(classItem)}
+                    style={styles.leaveButton}
+                    title="Rời lớp"
                   >
-                    Xem lớp học
-                  </button>
-                  <button
-                    onClick={() => handleOpenRepo(classItem.repoUrl)}
-                    style={styles.repoButton}
-                  >
-                    Mở Repository
+                    Rời lớp
                   </button>
                 </div>
+                <div style={styles.cardBody}>
+                  {classItem.deadline && (
+                    <>
+                      <p style={styles.cardInfo}>
+                        <strong>Deadline:</strong> {new Date(classItem.deadline).toLocaleString('vi-VN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                      {new Date(classItem.deadline) < new Date() && (
+                        <p style={styles.cardInfoExpired}>
+                          <strong>Đã hết hạn</strong>
+                        </p>
+                      )}
+                    </>
+                  )}
+                  <p style={styles.cardInfo}>
+                    <strong>Mã lớp:</strong> {classItem.classCode}
+                  </p>
+                  <p style={styles.cardInfo}>
+                    <strong>Branch của bạn:</strong> {classItem.branchName}
+                  </p>
+                  <div style={styles.cardActions}>
+                    <button
+                      onClick={() => {
+                        setSelectedClass(classItem);
+                        // Open folder when viewing class details
+                        vscode.postMessage({ type: 'openClassFolder', classCode: classItem.classCode });
+                      }}
+                      style={styles.viewClassButton}
+                    >
+                      Xem lớp học
+                    </button>
+                    <button
+                      onClick={() => handleOpenRepo(classItem.repoUrl)}
+                      style={styles.repoButton}
+                    >
+                      Mở Repository
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          
+          <CommitHeatmap apiService={apiService} />
+        </>
       )}
     </div>
   );
@@ -235,6 +263,12 @@ const styles = {
     margin: '8px 0',
     color: '#8e8e8e',
     fontWeight: '400',
+  },
+  cardInfoExpired: {
+    fontSize: '13px',
+    margin: '8px 0',
+    color: '#dc3545',
+    fontWeight: '700',
   },
   cardActions: {
     display: 'flex',

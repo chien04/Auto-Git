@@ -76,7 +76,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 break;
 
             case 'createClass':
-                await this._handleCreateClass(message.className, message.localPath);
+                await this._handleCreateClass(message.className, message.localPath, message.deadline);
                 break;
 
             case 'joinClass':
@@ -105,6 +105,10 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
             case 'syncWorkspace':
                 await this._handleSyncWorkspace(message.classCode);
+                break;
+
+            case 'removeStudent':
+                await this._handleRemoveStudent(message.classCode, message.studentId, message.studentName);
                 break;
 
             case 'openClassFolder':
@@ -207,7 +211,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                                         userId: loginResponse.userId,
                                         name: loginResponse.name,
                                         role: loginResponse.role
-                                    }
+                                    },
+                                    token: loginResponse.token
                                 });
                                 
                                 setTimeout(() => server.close(), 1000);
@@ -345,7 +350,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                     userId: loginResponse.userId,
                     name: loginResponse.name,
                     role: loginResponse.role
-                }
+                },
+                token: loginResponse.token
             });
             
             vscode.window.showInformationMessage(`Đăng nhập thành công! Xin chào ${loginResponse.name}`);
@@ -392,9 +398,9 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async _handleCreateClass(className: string, localPath: string) {
+    private async _handleCreateClass(className: string, localPath: string, deadline?: string) {
         try {
-            const response = await this.apiService.createClass(className, localPath);
+            const response = await this.apiService.createClass(className, localPath, deadline);
 
             // Save class info with credentials
             await this._context.globalState.update('current_class', {
@@ -462,7 +468,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 repoUrl: response.repoUrl,
                 branch: response.branch,
                 token: response.token,
-                role: 'student'
+                role: 'student',
+                deadline: response.deadline
             });
 
             this._postMessage({
@@ -483,6 +490,9 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 token: response.token,
                 localPath: clonePath
             });
+
+            // Set class info for deadline check
+            this.gitService.setClassInfo(this.apiService, classCode);
 
             // Enable auto-push
             this.gitService.enableAutoPush();
@@ -518,13 +528,15 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         if (userData && this._view) {
             this._postMessage({
                 type: 'restoreState',
-                user: userData
+                user: userData,
+                token: token
             });
         } else if (this._view) {
             // Không có user, gửi message để kết thúc loading
             this._postMessage({
                 type: 'restoreState',
-                user: null
+                user: null,
+                token: null
             });
         }
     }
@@ -561,6 +573,21 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         } catch (error: any) {
             console.error('[Provider] Sync failed:', error);
             vscode.window.showErrorMessage(`❌ Lỗi đồng bộ: ${error.message}`);
+        }
+    }
+
+    private async _handleRemoveStudent(classCode: string, studentId: string, studentName: string) {
+        try {
+            await this.apiService.removeStudent(classCode, studentId);
+            
+            vscode.window.showInformationMessage(`✅ Đã xóa sinh viên ${studentName}`);
+            
+            // Reload student list
+            this._postMessage({
+                type: 'studentRemoved'
+            });
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`❌ Lỗi xóa sinh viên: ${error.message}`);
         }
     }
 
@@ -727,8 +754,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';">
-                <title>Auto Git Classroom</title>
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080;">
+                <title>Auto Submit</title>
             </head>
             <body>
                 <div id="root"></div>
@@ -746,20 +773,40 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         return text;
     }
 
-    public async handleAutoPush() {
+    public async handleAutoPush(classInfo?: any) {
         try {
             if (this.gitService.isAutoPushEnabled()) {
+                console.log('[ClassroomViewProvider] Starting auto-push...');
                 await this.gitService.autoPush();
+                console.log('[ClassroomViewProvider] Auto-push completed successfully');
+                
+                // Update commit count after successful push
+                console.log('[ClassroomViewProvider] ClassInfo received:', classInfo);
+                
+                if (classInfo?.classCode) {
+                    console.log('[ClassroomViewProvider] Calling updateCommitCount for class:', classInfo.classCode);
+                    try {
+                        const result = await this.apiService.updateCommitCount(classInfo.classCode);
+                        console.log('[ClassroomViewProvider] Commit count updated:', result);
+                    } catch (error) {
+                        console.error('[ClassroomViewProvider] Failed to update commit count (non-critical):', error);
+                    }
+                } else {
+                    console.warn('[ClassroomViewProvider] Cannot update commit count - no classCode found');
+                }
                 
                 this._postMessage({
                     command: 'pushSuccess'
                 });
             }
         } catch (error: any) {
+            console.error('[ClassroomViewProvider] Auto-push error:', error);
             this._postMessage({
                 command: 'pushError',
                 error: error.message
             });
+            // Re-throw error so extension.ts can handle it
+            throw error;
         }
     }
 }

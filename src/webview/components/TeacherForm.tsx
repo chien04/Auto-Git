@@ -7,6 +7,7 @@ interface TeacherFormProps {
 const TeacherForm: React.FC<TeacherFormProps> = ({ vscode }) => {
   const [className, setClassName] = useState('');
   const [localPath, setLocalPath] = useState('');
+  const [deadline, setDeadline] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -16,6 +17,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode }) => {
         setMessage(`Lớp học đã được tạo! Mã lớp: ${msg.data.classCode}`);
         setClassName('');
         setLocalPath('');
+        setDeadline('');
         // Notify parent dashboard
         vscode.postMessage({ type: 'classCreated' });
       } else if (msg.command === 'createClassError') {
@@ -41,7 +43,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode }) => {
       setMessage('Vui lòng chọn thư mục lưu repository');
       return;
     }
-    vscode.postMessage({ type: 'createClass', className, localPath });
+    vscode.postMessage({ type: 'createClass', className, localPath, deadline: deadline || null });
     setMessage('Đang tạo lớp học...');
   };
 
@@ -77,10 +79,21 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode }) => {
               readOnly
               style={styles.input}
             />
-            <button onClick={handleSelectFolder} style={styles.selectButton}>
-              📁 Chọn thư mục
+            <button onClick={handleSelectFolder} style={styles.button}>
+              Chọn thư mục
             </button>
           </div>
+        </div>
+
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Deadline nộp bài (tùy chọn)</label>
+          <input
+            type="datetime-local"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+            style={styles.input}
+          />
+          <p style={styles.hint}>Để trống nếu không có deadline</p>
         </div>
 
         <button onClick={handleCreateClass} style={styles.button}>
@@ -188,6 +201,12 @@ const styles = {
     textAlign: 'center' as const,
     color: '#262626',
     fontWeight: '500',
+  },
+  hint: {
+    fontSize: '12px',
+    color: '#8e8e8e',
+    marginTop: '6px',
+    fontWeight: '400',
   },
 };
 

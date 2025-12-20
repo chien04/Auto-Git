@@ -87,19 +87,29 @@ function setupAutoPush(context: vscode.ExtensionContext) {
 				// Check if the saved file is in the workspace
 				if (workspacePath && document.uri.fsPath.startsWith(workspacePath)) {
 					console.log(`Auto-pushing changes for: ${document.fileName}`);
-					vscode.window.showInformationMessage('⏳ Đang push code lên GitHub...');
 					
 					// Small delay to ensure file is written
 					await new Promise(resolve => setTimeout(resolve, 500));
 					
-					await classroomViewProvider.handleAutoPush();
-					
-					// Show success notification
-					vscode.window.showInformationMessage('✅ Đã push code lên GitHub!');
-					vscode.window.setStatusBarMessage(
-						'$(cloud-upload) Auto-pushed to GitHub',
-						3000
-					);
+					try {
+						await classroomViewProvider.handleAutoPush(classInfo);
+						
+						// Only show success message if push succeeded
+						vscode.window.showInformationMessage('✅ Đã push code lên GitHub!');
+						vscode.window.setStatusBarMessage(
+							'$(cloud-upload) Auto-pushed to GitHub',
+							3000
+						);
+					} catch (pushError: any) {
+						// Check if it's a deadline error
+						if (pushError.message && pushError.message.includes('Deadline')) {
+							vscode.window.showErrorMessage('⏰ Đã quá hạn nộp bài!');
+						} else {
+							vscode.window.showErrorMessage(`Lỗi push code: ${pushError.message}`);
+						}
+						// Don't re-throw, just return to avoid showing duplicate errors
+						return;
+					}
 				} else {
 					console.log('File not in workspace. Workspace:', workspacePath, 'File:', document.uri.fsPath);
 					vscode.window.showWarningMessage(`File không trong workspace. WS: ${workspacePath}`);
@@ -112,7 +122,10 @@ function setupAutoPush(context: vscode.ExtensionContext) {
 			}
 		} catch (error: any) {
 			console.error('Auto-push error:', error);
-			vscode.window.showErrorMessage(`Auto-push failed: ${error.message}`);
+			// Don't show error again if already shown in inner catch
+			if (!error.message || !error.message.includes('Deadline')) {
+				vscode.window.showErrorMessage(`Auto-push failed: ${error.message}`);
+			}
 		}
 	});
 
@@ -181,7 +194,8 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 							repoUrl: repoUrl,
 							branch: branch,
 							token: savedToken,
-							role: role
+							role: role,
+							deadline: classInfo?.deadline
 						});
 						
 						// Initialize git service with detected credentials
@@ -190,6 +204,11 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 							repoUrl: repoUrl,
 							branch: branch
 						});
+						
+						// Set class info for deadline check (student only)
+						if (role === 'student' && classCode) {
+							gitService.setClassInfo(apiService, classCode);
+						}
 						
 						// Enable auto-push
 						gitService.enableAutoPush();

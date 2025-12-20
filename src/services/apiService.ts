@@ -15,6 +15,7 @@ export interface CreateClassResponse {
     className: string;
     token: string;
     branch: string;
+    deadline?: string;
 }
 
 export interface JoinClassResponse {
@@ -22,6 +23,41 @@ export interface JoinClassResponse {
     branch: string;
     token: string;
     studentId: string;
+    deadline?: string;
+}
+
+export interface StudentDashboard {
+    totalCommits: number;
+    lastCommitAt: string | null;
+    totalClasses: number;
+    activeClasses: number;
+}
+
+export interface TeacherDashboard {
+    totalStudents: number;
+    studentsSubmitted: number;
+    studentsNotSubmitted: number;
+    submittedPercentage: number;
+    notSubmittedPercentage: number;
+    averageCommitsPerStudent: number;
+    totalClasses: number;
+    activeClasses: number;
+}
+
+export interface CommitActivity {
+    dailyCommits: { [date: string]: number };
+}
+
+export interface ClassStatistics {
+    classId: number;
+    className: string;
+    classCode: string;
+    totalStudents: number;
+    studentsSubmitted: number;
+    studentsNotSubmitted: number;
+    submittedPercentage: number;
+    notSubmittedPercentage: number;
+    isActive: boolean;
 }
 
 export class ApiService {
@@ -91,9 +127,13 @@ export class ApiService {
     /**
      * Teacher: Create a new class and repository
      */
-    async createClass(className: string, localPath: string): Promise<CreateClassResponse> {
+    async createClass(className: string, localPath: string, deadline?: string): Promise<CreateClassResponse> {
         try {
-            const response = await this.api.post('/class/create', { className, localPath });
+            const response = await this.api.post('/class/create', { 
+                className, 
+                localPath,
+                deadline: deadline || null
+            });
             return response.data;
         } catch (error: any) {
             throw new Error(`Failed to create class: ${error.response?.data?.message || error.message}`);
@@ -324,5 +364,89 @@ export class ApiService {
             console.error('[API] Error response:', error.response?.data);
             throw new Error(`Failed to sync workspace: ${error.response?.data?.error || error.message}`);
         }
+    }
+
+    /**
+     * Remove student from class (Teacher only)
+     */
+    async removeStudent(classCode: string, studentId: string): Promise<{ message: string }> {
+        try {
+            const response = await this.api.delete(`/class/${classCode}/student/${studentId}`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Remove student error:', error);
+            throw new Error(`Failed to remove student: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Check if deadline has passed for a class (Student)
+     */
+    async checkDeadline(classCode: string): Promise<{
+        hasDeadline: boolean;
+        deadline?: string;
+        canPush: boolean;
+        message: string;
+    }> {
+        try {
+            const response = await this.api.get(`/class/${classCode}/deadline/check`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Check deadline error:', error);
+            throw new Error(`Failed to check deadline: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Update commit count for student after push
+     */
+    async updateCommitCount(classCode: string): Promise<{ commitCount: number; message: string }> {
+        try {
+            console.log('[API] Calling updateCommitCount for class:', classCode);
+            console.log('[API] JWT Token exists:', !!this.jwtToken);
+            
+            const response = await this.api.post(`/class/${classCode}/student/update-commits`);
+            
+            console.log('[API] Update commit count SUCCESS:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Update commit count ERROR:', error);
+            console.error('[API] Error response:', error.response?.data);
+            console.error('[API] Error status:', error.response?.status);
+            // Don't throw - this is not critical
+            return { commitCount: 0, message: 'Failed to update: ' + (error.response?.data?.error || error.message) };
+        }
+    }
+
+    /**
+     * Get dashboard data for student
+     */
+    async getStudentDashboard(): Promise<StudentDashboard> {
+        const response = await this.api.get('/dashboard/student');
+        return response.data;
+    }
+
+    /**
+     * Get dashboard data for teacher
+     */
+    async getTeacherDashboard(): Promise<TeacherDashboard> {
+        const response = await this.api.get('/dashboard/teacher');
+        return response.data;
+    }
+
+    /**
+     * Get commit activity heatmap for student
+     */
+    async getStudentActivity(): Promise<CommitActivity> {
+        const response = await this.api.get('/dashboard/student/activity');
+        return response.data;
+    }
+
+    /**
+     * Get class statistics for teacher
+     */
+    async getTeacherClassStatistics(): Promise<ClassStatistics[]> {
+        const response = await this.api.get('/dashboard/teacher/classes');
+        return response.data;
     }
 }

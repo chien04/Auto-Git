@@ -81,7 +81,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode }) => {
         </div>
 
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Thư mục lưu repository</label>
+          <label style={styles.label}>Thư mục lưu trữ</label>
           <div style={styles.folderSelector}>
             <input
               type="text"
@@ -90,8 +90,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode }) => {
               readOnly
               style={styles.input}
             />
-            <button onClick={handleSelectFolder} style={styles.selectButton}>
-              📁 Chọn thư mục
+            <button onClick={handleSelectFolder} style={styles.button}>
+              Chọn thư mục
             </button>
           </div>
         </div>

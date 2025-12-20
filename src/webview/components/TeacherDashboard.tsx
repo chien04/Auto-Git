@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import StudentList from './StudentList';
+import { TeacherStatsCard } from './TeacherStatsCard';
+import { ClassDetailStats } from './ClassDetailStats';
 
 interface TeacherDashboardProps {
   vscode: any;
   user: any;
+  apiService: any;
 }
 
 interface ClassItem {
@@ -12,6 +15,7 @@ interface ClassItem {
   classCode: string;
   repoUrl: string;
   studentCount: number;
+  deadline?: string;
 }
 
 interface Student {
@@ -23,12 +27,13 @@ interface Student {
   joinedAt: string;
 }
 
-const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => {
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiService }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [viewStudentList, setViewStudentList] = useState(false);
+  const [classStats, setClassStats] = useState<{totalStudents: number, studentsSubmitted: number, studentsNotSubmitted: number, submittedPercentage: number, notSubmittedPercentage: number} | null>(null);
 
   useEffect(() => {
     // Listen for messages from extension
@@ -40,6 +45,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
           break;
         case 'studentsLoaded':
           setStudents(message.students);
+          // Calculate stats for this class
+          const total = message.students.length;
+          const submitted = message.students.filter((s: Student) => (s.commitCount || 0) > 1).length;
+          const notSubmitted = total - submitted;
+          setClassStats({
+            totalStudents: total,
+            studentsSubmitted: submitted,
+            studentsNotSubmitted: notSubmitted,
+            submittedPercentage: total > 0 ? Math.round((submitted * 100 / total) * 10) / 10 : 0,
+            notSubmittedPercentage: total > 0 ? Math.round((notSubmitted * 100 / total) * 10) / 10 : 0
+          });
           break;
         case 'classCreated':
           vscode.postMessage({ type: 'loadMyClasses' });
@@ -124,6 +140,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
           ←
         </button>
         
+        {classStats && (
+          <ClassDetailStats
+            totalStudents={classStats.totalStudents}
+            studentsSubmitted={classStats.studentsSubmitted}
+            studentsNotSubmitted={classStats.studentsNotSubmitted}
+            submittedPercentage={classStats.submittedPercentage}
+            notSubmittedPercentage={classStats.notSubmittedPercentage}
+          />
+        )}
+        
         <div style={styles.classHeader}>
           <div>
             <h2 style={styles.className}>{selectedClass.className}</h2>
@@ -132,9 +158,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
           <div style={styles.classActions}>
             <button 
               onClick={() => handleSyncWorkspace(selectedClass.classCode)}
-              style={styles.syncButton}
+              style={styles.deleteButton}
             >
-              🔄 Làm mới code
+              Làm mới
             </button>
             <button 
               onClick={() => handleDeleteClass(selectedClass)}
@@ -147,7 +173,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
 
         <div style={styles.studentList}>
           <h3 style={styles.sectionTitle}>
-            Danh sách sinh viên ({students.length})
+            Danh sách sinh viên
           </h3>
           {students.length === 0 ? (
             <p style={styles.emptyText}>Chưa có sinh viên nào tham gia</p>
@@ -174,6 +200,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
 
   return (
     <div style={styles.container}>
+      <TeacherStatsCard apiService={apiService} />
+      
       <div style={styles.header}>
         <h2 style={styles.title}>Lớp học của tôi</h2>
         <button onClick={() => setShowCreateForm(true)} style={styles.createButton}>
@@ -205,6 +233,24 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => 
                 </div>
               </div>
               <div style={styles.cardBody}>
+                {classItem.deadline && (
+                  <>
+                    <p style={styles.cardInfo}>
+                      <strong>Deadline:</strong> {new Date(classItem.deadline).toLocaleString('vi-VN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                    {new Date(classItem.deadline) < new Date() && (
+                      <p style={styles.cardInfoExpired}>
+                        <strong>Đã hết hạn</strong>
+                      </p>
+                    )}
+                  </>
+                )}
                 <p style={styles.cardInfo}>
                   <strong>Mã lớp:</strong> {classItem.classCode}
                 </p>
@@ -300,6 +346,12 @@ const styles = {
     margin: '8px 0',
     color: '#8e8e8e',
     fontWeight: '400',
+  },
+  cardInfoExpired: {
+    fontSize: '13px',
+    margin: '8px 0',
+    color: '#dc3545',
+    fontWeight: '700',
   },
   viewButton: {
     marginTop: '16px',
