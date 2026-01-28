@@ -2,206 +2,143 @@ import React, { useState, useEffect } from 'react';
 
 interface StudentFormProps {
   vscode: any;
+  user?: any;
+  onClose?: () => void;
 }
 
-const StudentForm: React.FC<StudentFormProps> = ({ vscode }) => {
+const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
   const [studentName, setStudentName] = useState('');
   const [classCode, setClassCode] = useState('');
-  const [localPath, setLocalPath] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.command === 'joinClassSuccess') {
-        setMessage('Tham gia lớp học thành công!');
+        setMessage('Tham gia lớp học thành công! Bạn có thể tham gia bài tập.');
         setStudentName('');
         setClassCode('');
-        setLocalPath('');
         // Notify parent dashboard
         vscode.postMessage({ type: 'classJoined' });
       } else if (msg.command === 'joinClassError') {
         setMessage(`Lỗi: ${msg.error}`);
-      } else if (msg.type === 'folderSelected') {
-        setLocalPath(msg.path);
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [vscode]);
 
-  const handleSelectFolder = () => {
-    vscode.postMessage({ type: 'selectFolder' });
-  };
-
   const handleJoinClass = () => {
     if (!studentName || !classCode) {
       setMessage('Vui lòng nhập đầy đủ thông tin');
       return;
     }
-    if (!localPath) {
-      setMessage('Vui lòng chọn thư mục lưu repository');
-      return;
-    }
-    vscode.postMessage({ type: 'joinClass', studentName, classCode, localPath });
+    vscode.postMessage({ type: 'joinClass', studentName, classCode });
     setMessage('Đang tham gia lớp học...');
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Tham Gia Lớp Học</h2>
-        <p style={styles.description}>
-          Nhập thông tin để tham gia lớp học
-        </p>
-
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Tên sinh viên</label>
-          <input
-            type="text"
-            placeholder="Nhập tên của bạn"
-            value={studentName}
-            onChange={(e) => setStudentName(e.target.value)}
-            style={styles.input}
-          />
-        </div>
-
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Mã lớp học</label>
-          <input
-            type="text"
-            placeholder="Nhập mã lớp học"
-            value={classCode}
-            onChange={(e) => setClassCode(e.target.value.toUpperCase())}
-            style={styles.input}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') handleJoinClass();
-            }}
-          />
-        </div>
-
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Thư mục lưu trữ</label>
-          <div style={styles.folderSelector}>
-            <input
-              type="text"
-              placeholder="Chọn thư mục..."
-              value={localPath}
-              readOnly
-              style={styles.input}
-            />
-            <button onClick={handleSelectFolder} style={styles.button}>
-              Chọn thư mục
-            </button>
+    <>
+      {/* Header */}
+      <header className="flex items-center justify-between whitespace-nowrap border-b border-[#dbdfe6] px-6 py-4 bg-white">
+        <div className="flex items-center gap-3 text-[#111318]">
+          <div className="w-6 h-6 text-[#111318] flex items-center justify-center">
+            <svg className="w-full h-full" fill="currentColor" viewBox="0 0 48 48">
+              <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
+            </svg>
           </div>
+          <h2 className="text-lg font-bold leading-tight tracking-tight">AutoGit</h2>
+        </div>
+        <button 
+          onClick={onClose}
+          className="flex items-center justify-center rounded-lg h-9 w-9 bg-[#f7f7f7] text-[#616f89] hover:bg-[#e5e5e5] transition-colors"
+          title="Đóng"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+
+      {/* Form Content Container */}
+      <main className="flex flex-col flex-1 px-6 py-10 bg-white h-full">
+        {/* Headline Section */}
+        <div className="flex flex-col items-center mb-8">
+          <h1 className="text-[#111318] tracking-tight text-[28px] font-extrabold leading-tight text-center">
+            Tham gia lớp học
+          </h1>
+          {/* Body Text */}
+          <p className="text-[#616f89] text-base font-normal leading-relaxed text-center mt-3">
+            Nhập tên và mã lớp học do giáo viên cung cấp
+          </p>
         </div>
 
-        <button onClick={handleJoinClass} style={styles.button}>
-          Tham gia lớp học
-        </button>
+        {/* Input Fields Section */}
+        <div className="space-y-5">
+          {/* Student Name Field */}
+          <div className="flex flex-col w-full">
+            <label className="flex flex-col w-full">
+              <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Tên sinh viên</span>
+              <input 
+                type="text"
+                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#111318]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
+                placeholder="Ví dụ: Nguyễn Văn A"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+              />
+            </label>
+          </div>
 
-        {message && (
-          <div style={styles.message}>{message}</div>
-        )}
-      </div>
-    </div>
+          {/* Class Code Field */}
+          <div className="flex flex-col w-full">
+            <label className="flex flex-col w-full">
+              <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Mã lớp học</span>
+              <input 
+                type="text"
+                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#111318]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
+                placeholder="Ví dụ: AB12-CD34"
+                value={classCode}
+                onChange={(e) => setClassCode(e.target.value.toUpperCase())}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') handleJoinClass();
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Message Display */}
+          {message && (
+            <div className="p-4 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20">
+              <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons Section */}
+        <div className="mt-10 flex flex-col gap-4">
+          <button 
+            onClick={handleJoinClass}
+            className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 bg-[#111318] text-white gap-2 text-base font-bold leading-normal tracking-wide hover:bg-[#2c2c2c] transition-colors"
+          >
+            <span>Tham gia lớp học</span>
+          </button>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#616f89] gap-2 text-sm font-medium leading-normal hover:text-[#111318] transition-colors"
+            >
+              <span>Hủy</span>
+            </button>
+          )}
+        </div>
+
+        {/* Visual Accent */}
+        <div className="mt-auto pt-10 flex justify-center opacity-10">
+          <div className="w-24 h-1 bg-[#111318] rounded-full"></div>
+        </div>
+      </main>
+    </>
   );
-};
-
-const styles = {
-  container: {
-    padding: '24px',
-    backgroundColor: '#fafafa',
-    minHeight: '100vh',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    padding: '40px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-    border: '1px solid #dbdbdb',
-    maxWidth: '480px',
-    margin: '0 auto',
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '700',
-    marginBottom: '8px',
-    color: '#000',
-    letterSpacing: '-0.5px',
-  },
-  description: {
-    fontSize: '14px',
-    color: '#8e8e8e',
-    marginBottom: '32px',
-    fontWeight: '400',
-  },
-  inputGroup: {
-    marginBottom: '24px',
-  },
-  label: {
-    display: 'block',
-    fontSize: '13px',
-    fontWeight: '600',
-    marginBottom: '10px',
-    color: '#262626',
-    letterSpacing: '0.2px',
-  },
-  input: {
-    width: '100%',
-    padding: '14px 16px',
-    border: '1px solid #dbdbdb',
-    borderRadius: '12px',
-    fontSize: '14px',
-    boxSizing: 'border-box' as const,
-    backgroundColor: '#fafafa',
-    color: '#262626',
-    outline: 'none',
-    transition: 'all 0.15s ease',
-  },
-  folderSelector: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-  },
-  selectButton: {
-    padding: '14px 20px',
-    backgroundColor: '#0066FF',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap' as const,
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  button: {
-    width: '100%',
-    padding: '14px',
-    backgroundColor: '#000',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  message: {
-    marginTop: '20px',
-    padding: '14px 16px',
-    backgroundColor: '#f0f0f0',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '13px',
-    textAlign: 'center' as const,
-    color: '#262626',
-    fontWeight: '500',
-  },
 };
 
 export default StudentForm;

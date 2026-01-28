@@ -76,11 +76,31 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 break;
 
             case 'createClass':
-                await this._handleCreateClass(message.className, message.localPath, message.deadline);
+                await this._handleCreateClass(message.className);
                 break;
 
             case 'joinClass':
-                await this._handleJoinClass(message.studentName, message.classCode, message.localPath);
+                await this._handleJoinClass(message.studentName, message.classCode);
+                break;
+                
+            case 'createAssignment':
+                await this._handleCreateAssignment(message.classCode, message.title, message.description, message.deadline);
+                break;
+                
+            case 'joinAssignment':
+                await this._handleJoinAssignmentWithPrompt(message.assignmentCode);
+                break;
+                
+            case 'viewAssignment':
+                await this._handleViewAssignment(message.assignmentCode);
+                break;
+                
+            case 'openTeacherAssignment':
+                await this._handleOpenTeacherAssignment(message.assignmentCode);
+                break;
+                
+            case 'openAssignmentFolder':
+                await this._handleOpenAssignmentFolder(message.localPath);
                 break;
                 
             case 'loadMyClasses':
@@ -97,6 +117,10 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 
             case 'leaveClass':
                 await this._handleLeaveClass(message.classCode, message.className, message.branchName);
+                break;
+                
+            case 'getCurrentWorkspace':
+                await this._handleGetCurrentWorkspace();
                 break;
                 
             case 'openWorkspace':
@@ -131,13 +155,23 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             case 'openUrl':
                 await vscode.env.openExternal(vscode.Uri.parse(message.url));
                 break;
+                
+            case 'openChat':
+                // Forward openChat message to webview
+                this._postMessage({
+                    type: 'openChat',
+                    config: message.config
+                });
+                break;
         }
     }
 
     private async _handleGoogleLogin(role: string) {
+        let server: http.Server | null = null;
+        
         try {
             // Create a local HTTP server to receive OAuth callback
-            const server = http.createServer();
+            server = http.createServer();
             const port = 3000; // Local callback port
             
             let loginResult: { success: boolean; error?: string } = { success: false };
@@ -145,11 +179,13 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             // Promise to wait for OAuth callback
             const codePromise = new Promise<string>((resolve, reject) => {
                 const timeout = setTimeout(() => {
-                    server.close();
+                    if (server) {
+                        server.close();
+                    }
                     reject(new Error('OAuth timeout - không nhận được callback sau 5 phút'));
                 }, 5 * 60 * 1000); // 5 minutes timeout
 
-                server.on('request', async (req, res) => {
+                server!.on('request', async (req, res) => {
                     try {
                         const url = new URL(req.url!, `http://localhost:${port}`);
                         const code = url.searchParams.get('code');
@@ -215,7 +251,13 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                                     token: loginResponse.token
                                 });
                                 
-                                setTimeout(() => server.close(), 1000);
+                                setTimeout(() => {
+                                    if (server) {
+                                        server.close(() => {
+                                            console.log('[OAuth] Server closed successfully');
+                                        });
+                                    }
+                                }, 1000);
                                 resolve(code);
                                 
                             } catch (error: any) {
@@ -252,32 +294,54 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                                     </html>
                                 `);
                                 
-                                setTimeout(() => server.close(), 1000);
+                                setTimeout(() => {
+                                    if (server) {
+                                        server.close(() => {
+                                            console.log('[OAuth] Server closed after error');
+                                        });
+                                    }
+                                }, 1000);
                                 reject(error);
                             }
                         } else {
                             res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
                             res.end('<html><body><h1>Error: No authorization code</h1></body></html>');
+                            if (server) {
+                                server.close();
+                            }
                             reject(new Error('No authorization code received'));
                         }
                     } catch (err) {
+                        if (server) {
+                            server.close();
+                        }
                         reject(err);
                     }
                 });
 
-                server.on('error', (err) => {
+                server!.on('error', (err) => {
                     clearTimeout(timeout);
+                    if (server) {
+                        server.close();
+                    }
                     reject(err);
                 });
             });
 
-            // Start local server
+            // Start local server with error handling
             await new Promise<void>((resolve, reject) => {
-                server.listen(port, 'localhost', () => {
+                server!.listen(port, 'localhost', () => {
                     console.log(`OAuth callback server listening on http://localhost:${port}`);
                     resolve();
                 });
-                server.on('error', reject);
+                server!.on('error', (err: any) => {
+                    if (err.code === 'EADDRINUSE') {
+                        console.error(`[OAuth] Port ${port} is already in use.`);
+                        reject(new Error(`Port ${port} đang được sử dụng. Vui lòng đóng extension rồi mở lại (Ctrl+Shift+P -> "Developer: Reload Window").`));
+                    } else {
+                        reject(err);
+                    }
+                });
             });
 
             // Get Google OAuth URL (backend will redirect to localhost:3000)
@@ -299,6 +363,13 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 vscode.window.showInformationMessage(`Đăng nhập thành công! Xin chào ${userData?.name}`);
             }
         } catch (error: any) {
+            // Make sure server is closed on error
+            if (server) {
+                server.close(() => {
+                    console.log('[OAuth] Server closed due to error');
+                });
+            }
+            
             this._postMessage({
                 type: 'loginError',
                 error: error.message
@@ -398,45 +469,14 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async _handleCreateClass(className: string, localPath: string, deadline?: string) {
+    private async _handleCreateClass(className: string) {
         try {
-            const response = await this.apiService.createClass(className, localPath, deadline);
-
-            // Save class info with credentials
-            await this._context.globalState.update('current_class', {
-                classId: response.classId,
-                classCode: response.classCode,
-                className: response.className,
-                repoUrl: response.repoUrl,
-                token: response.token,
-                branch: response.branch,
-                role: 'teacher'
-            });
+            const response = await this.apiService.createClass(className);
 
             this._postMessage({
                 command: 'createClassSuccess',
                 data: response
             });
-
-            // Backend already cloned repo to localPath
-            // Get localPath from API
-            const pathResponse = await this.apiService.getLocalPath(response.classCode);
-            
-            if (pathResponse.localPath) {
-                // Initialize git service with teacher credentials
-                await this.gitService.initializeWorkspace(pathResponse.localPath, {
-                    token: response.token,
-                    repoUrl: response.repoUrl,
-                    branch: response.branch
-                });
-                
-                // Enable auto-push for teacher
-                this.gitService.enableAutoPush();
-                
-                // Open folder
-                const uri = vscode.Uri.file(pathResponse.localPath);
-                await vscode.commands.executeCommand('vscode.openFolder', uri, false);
-            }
 
             vscode.window.showInformationMessage(
                 `Lớp học đã được tạo! Class Code: ${response.classCode}`,
@@ -456,57 +496,17 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async _handleJoinClass(studentName: string, classCode: string, localPath: string) {
+    private async _handleJoinClass(studentName: string, classCode: string) {
         try {
-            const response = await this.apiService.joinClass(studentName, classCode, localPath);
-
-            // Save student info
-            await this._context.globalState.update('current_class', {
-                classCode: classCode,
-                studentName: studentName,
-                studentId: response.studentId,
-                repoUrl: response.repoUrl,
-                branch: response.branch,
-                token: response.token,
-                role: 'student',
-                deadline: response.deadline
-            });
+            const response = await this.apiService.joinClass(studentName, classCode);
 
             this._postMessage({
                 command: 'joinClassSuccess',
                 data: response
             });
 
-            // Create subfolder in the selected path (className-classCode)
-            const folderName = `${classCode}-student-${studentName.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            const clonePath = path.join(localPath, folderName);
-
-            // Clone repository
-            vscode.window.showInformationMessage('Đang clone repository...');
-            
-            await this.gitService.cloneRepository({
-                repoUrl: response.repoUrl,
-                branch: response.branch,
-                token: response.token,
-                localPath: clonePath
-            });
-
-            // Set class info for deadline check
-            this.gitService.setClassInfo(this.apiService, classCode);
-
-            // Enable auto-push
-            this.gitService.enableAutoPush();
-
-            // Open cloned folder in workspace
-            const uri = vscode.Uri.file(clonePath);
-            await vscode.commands.executeCommand('vscode.openFolder', uri, false);
-
-            this._postMessage({
-                command: 'cloneComplete'
-            });
-
             vscode.window.showInformationMessage(
-                'Repository đã được clone! Auto-push đã được kích hoạt.'
+                `Đã tham gia lớp! Bây giờ bạn có thể tham gia các bài tập.`
             );
         } catch (error: any) {
             this._postMessage({
@@ -538,6 +538,411 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 user: null,
                 token: null
             });
+        }
+    }
+
+    private async _handleCreateAssignment(classCode: string, title: string, description: string, deadline: string) {
+        try {
+            // First, ask user to select a folder for the assignment
+            const folderResult = await vscode.window.showOpenDialog({
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: 'Chọn thư mục lưu bài tập',
+                title: 'Chọn thư mục để clone repository bài tập'
+            });
+
+            if (!folderResult || folderResult.length === 0) {
+                vscode.window.showWarningMessage('Đã hủy tạo bài tập (không chọn thư mục)');
+                return;
+            }
+
+            const localPath = folderResult[0].fsPath;
+
+            const response = await this.apiService.createAssignment(classCode, title, description, deadline);
+
+            // Clone repository to localPath
+            if (response.repoUrl && response.token) {
+                vscode.window.showInformationMessage('Đang clone repository bài tập...');
+                
+                const folderName = `${classCode}-${response.assignmentCode}`;
+                const clonePath = path.join(localPath, folderName);
+
+                await this.gitService.cloneRepository({
+                    repoUrl: response.repoUrl,
+                    branch: 'teacher', // Teacher works on 'teacher' branch
+                    token: response.token,
+                    localPath: clonePath
+                });
+
+                // Enable auto-push for teacher
+                await this.gitService.initializeWorkspace(clonePath, {
+                    token: response.token,
+                    repoUrl: response.repoUrl,
+                    branch: 'teacher' // Teacher pushes to 'teacher' branch
+                });
+                this.gitService.enableAutoPush();
+
+                // Save teacher's local path to database
+                try {
+                    console.log('[DEBUG] Attempting to save teacher local path to database...');
+                    console.log('[DEBUG]   - assignmentCode:', response.assignmentCode);
+                    console.log('[DEBUG]   - clonePath:', clonePath);
+                    
+                    const saveResult = await this.apiService.saveTeacherLocalPath(response.assignmentCode, clonePath);
+                    
+                    console.log('[DEBUG] ✅ Successfully saved teacher local path to database!');
+                    console.log('[DEBUG]   - Response:', JSON.stringify(saveResult));
+                } catch (error: any) {
+                    console.error('[DEBUG] ❌ Failed to save local path to database:', error);
+                    console.error('[DEBUG]   - Error message:', error.message);
+                    console.error('[DEBUG]   - Error stack:', error.stack);
+                    
+                    vscode.window.showWarningMessage(`⚠️ Không thể lưu đường dẫn vào database: ${error.message}`);
+                    // Continue even if database save fails
+                }
+
+                // Auto-setup workspace structure (students/ folder, .gitignore, etc.)
+                try {
+                    console.log('[DEBUG] Auto-setting up workspace structure...');
+                    vscode.window.showInformationMessage('Đang thiết lập workspace...');
+                    
+                    await this.apiService.setupAssignmentWorkspace(response.assignmentCode);
+                    
+                    console.log('[DEBUG] ✅ Workspace setup completed!');
+                    vscode.window.showInformationMessage('✅ Workspace đã sẵn sàng! Khi sinh viên join sẽ tự động tạo folder.');
+                } catch (error: any) {
+                    console.error('[DEBUG] ❌ Failed to setup workspace:', error);
+                    vscode.window.showWarningMessage(`⚠️ Không thể setup workspace: ${error.message}`);
+                    // Continue even if setup fails
+                }
+
+                // Save assignment info with credentials AND localPath
+                const assignmentInfo = {
+                    assignmentCode: response.assignmentCode,
+                    repoUrl: response.repoUrl,
+                    token: response.token,
+                    role: 'teacher',
+                    localPath: clonePath,
+                    branch: 'teacher' // Store correct branch
+                };
+                
+                await this._context.globalState.update(`assignment_${response.assignmentCode}`, assignmentInfo);
+                
+                // Also update current_class so auto-push can find the token
+                await this._context.globalState.update('current_class', assignmentInfo);
+                
+                console.log('[DEBUG] Saved assignment info to globalState with GitHub token');
+
+                this._postMessage({
+                    command: 'createAssignmentSuccess',
+                    data: { ...response, localPath: clonePath }
+                });
+
+                // Open folder
+                const uri = vscode.Uri.file(clonePath);
+                await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+            } else {
+                this._postMessage({
+                    command: 'createAssignmentSuccess',
+                    data: response
+                });
+            }
+
+            vscode.window.showInformationMessage(
+                `Bài tập đã được tạo! Assignment Code: ${response.assignmentCode}`,
+                'Copy Assignment Code'
+            ).then(selection => {
+                if (selection === 'Copy Assignment Code') {
+                    vscode.env.clipboard.writeText(response.assignmentCode);
+                    vscode.window.showInformationMessage('Đã copy assignment code!');
+                }
+            });
+        } catch (error: any) {
+            this._postMessage({
+                command: 'createAssignmentError',
+                error: error.message
+            });
+            vscode.window.showErrorMessage(`Lỗi tạo bài tập: ${error.message}`);
+        }
+    }
+
+    private async _handleJoinAssignmentWithPrompt(assignmentCode: string) {
+        // Prompt user to select folder
+        const folderOptions = await vscode.window.showOpenDialog({
+            canSelectFiles: false,
+            canSelectFolders: true,
+            canSelectMany: false,
+            openLabel: 'Chọn thư mục để lưu bài tập'
+        });
+
+        if (!folderOptions || folderOptions.length === 0) {
+            vscode.window.showErrorMessage('Vui lòng chọn thư mục để lưu bài tập');
+            return;
+        }
+
+        const localPath = folderOptions[0].fsPath;
+        await this._handleJoinAssignment(assignmentCode, localPath);
+    }
+
+    private async _handleJoinAssignment(assignmentCode: string, localPath: string) {
+        try {
+            // First, get assignment info to know the branch name
+            const tempResponse = await this.apiService.joinAssignment(assignmentCode, '');
+            
+            // Calculate the actual clone path based on branch name
+            const folderName = `${assignmentCode}-${tempResponse.branch.replace('student/', '')}`;
+            const clonePath = path.join(localPath, folderName);
+            
+            console.log('[DEBUG] Calculated clone path:', clonePath);
+            
+            // Now join again with the correct path
+            const response = await this.apiService.joinAssignment(assignmentCode, clonePath);
+
+            // Save student assignment info
+            const assignmentInfo = {
+                assignmentCode: assignmentCode,
+                repoUrl: response.repoUrl,
+                branch: response.branch,
+                token: response.token,
+                role: 'student',
+                deadline: response.deadline,
+                localPath: clonePath
+            };
+            
+            await this._context.globalState.update(`student_assignment_${assignmentCode}`, assignmentInfo);
+            await this._context.globalState.update('current_class', assignmentInfo);
+            
+            console.log('[DEBUG] Saved assignment info with localPath:', clonePath);
+
+            this._postMessage({
+                type: 'assignmentJoined',
+                data: response
+            });
+
+            vscode.window.showInformationMessage('Đang clone repository bài tập...');
+            
+            await this.gitService.cloneRepository({
+                repoUrl: response.repoUrl,
+                branch: response.branch,
+                token: response.token,
+                localPath: clonePath
+            });
+
+            console.log('[DEBUG] Clone completed at:', clonePath);
+
+            // Set assignment info for deadline check
+            this.gitService.setClassInfo(this.apiService, assignmentCode);
+
+            // Enable auto-push
+            this.gitService.enableAutoPush();
+
+            // Send success message BEFORE opening folder (as new window will close current one)
+            this._postMessage({
+                type: 'assignmentJoinedSuccess',
+                assignmentCode: assignmentCode
+            });
+
+            // Open cloned folder (this will open in a new window)
+            const uri = vscode.Uri.file(clonePath);
+            await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+
+            vscode.window.showInformationMessage(
+                'Repository bài tập đã được clone! Auto-push đã được kích hoạt.'
+            );
+        } catch (error: any) {
+            this._postMessage({
+                type: 'joinAssignmentError',
+                error: error.message
+            });
+            vscode.window.showErrorMessage(`Lỗi tham gia bài tập: ${error.message}`);
+        }
+    }
+
+    private async _handleViewAssignment(assignmentCode: string) {
+        try {
+            const students = await this.apiService.getAssignmentStudents(assignmentCode);
+            this._postMessage({
+                type: 'assignmentStudentsLoaded',
+                students: students
+            });
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Lỗi tải danh sách sinh viên: ${error.message}`);
+        }
+    }
+
+    private async _handleOpenTeacherAssignment(assignmentCode: string) {
+        try {
+            console.log('[DEBUG] Opening teacher assignment:', assignmentCode);
+            
+            // First, try to get local path from database (new method)
+            let assignmentInfo = null;
+            try {
+                const dbResponse = await this.apiService.getTeacherLocalPath(assignmentCode);
+                if (dbResponse.exists && dbResponse.localPath) {
+                    console.log('[DEBUG] Found local path in database:', dbResponse.localPath);
+                    
+                    // Get assignment info from globalState for token and repoUrl
+                    const storedInfo = this._context.globalState.get<any>(`assignment_${assignmentCode}`);
+                    
+                    assignmentInfo = {
+                        assignmentCode: assignmentCode,
+                        localPath: dbResponse.localPath,
+                        repoUrl: storedInfo?.repoUrl,
+                        token: storedInfo?.token,
+                        role: 'teacher',
+                        branch: 'teacher'
+                    };
+                }
+            } catch (error: any) {
+                console.log('[DEBUG] Failed to get path from database, falling back to globalState:', error.message);
+            }
+            
+            // Fallback to globalState if database lookup failed
+            if (!assignmentInfo) {
+                assignmentInfo = this._context.globalState.get<any>(`assignment_${assignmentCode}`);
+                console.log('[DEBUG] Assignment info from globalState:', assignmentInfo ? 'EXISTS' : 'NOT FOUND');
+            }
+            
+            if (assignmentInfo) {
+                console.log('[DEBUG]   - localPath:', assignmentInfo.localPath);
+                console.log('[DEBUG]   - repoUrl:', assignmentInfo.repoUrl);
+                console.log('[DEBUG]   - branch:', assignmentInfo.branch);
+                console.log('[DEBUG]   - hasToken:', !!assignmentInfo.token);
+            }
+            
+            if (assignmentInfo && assignmentInfo.localPath) {
+                // Check if folder exists
+                if (!fs.existsSync(assignmentInfo.localPath)) {
+                    console.error('[DEBUG] ❌ Folder does not exist:', assignmentInfo.localPath);
+                    vscode.window.showErrorMessage(`Thư mục không tồn tại: ${assignmentInfo.localPath}. Vui lòng tạo lại assignment.`);
+                    return;
+                }
+                
+                console.log('[DEBUG] ✅ Folder exists');
+                
+                // Check if we're already in this workspace
+                const currentWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+                const normalizedTarget = assignmentInfo.localPath.toLowerCase().replace(/\\/g, '/');
+                const normalizedCurrent = currentWorkspace?.toLowerCase().replace(/\\/g, '/');
+                
+                console.log('[DEBUG] Opening teacher assignment:');
+                console.log('[DEBUG]   Target:', normalizedTarget);
+                console.log('[DEBUG]   Current:', normalizedCurrent);
+                
+                if (normalizedCurrent === normalizedTarget) {
+                    console.log('[DEBUG] ✅ Already in correct workspace');
+                    vscode.window.showInformationMessage('Bạn đã đang ở workspace của bài tập này!');
+                    return;
+                }
+                
+                console.log('[DEBUG] ⚠️ Switching to workspace:', assignmentInfo.localPath);
+                
+                // Update current_class before opening workspace so it can be restored
+                await this._context.globalState.update('current_class', assignmentInfo);
+                console.log('[DEBUG] ✅ Updated current_class in globalState');
+                
+                // Auto-sync workspace when switching to it
+                try {
+                    console.log('[DEBUG] Auto-syncing workspace before opening...');
+                    vscode.window.showInformationMessage('Đang đồng bộ code từ sinh viên...');
+                    
+                    await this.apiService.syncAssignmentWorkspace(assignmentCode);
+                    
+                    console.log('[DEBUG] ✅ Auto-sync completed!');
+                    vscode.window.showInformationMessage('✅ Code đã được đồng bộ!');
+                } catch (syncError: any) {
+                    console.error('[DEBUG] Auto-sync failed:', syncError);
+                    // Don't block opening workspace if sync fails
+                    vscode.window.showWarningMessage(`Không thể đồng bộ code: ${syncError.message}`);
+                }
+                
+                // Open the folder where assignment was cloned
+                const uri = vscode.Uri.file(assignmentInfo.localPath);
+                console.log('[DEBUG] Opening folder with URI:', uri.toString());
+                await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+                console.log('[DEBUG] ✅ Folder open command executed');
+            } else {
+                console.error('[DEBUG] ❌ No assignment info or localPath');
+                vscode.window.showWarningMessage('Không tìm thấy thông tin bài tập hoặc thư mục đã clone. Vui lòng tạo lại assignment.');
+            }
+        } catch (error: any) {
+            console.error('[DEBUG] ❌ Error opening teacher assignment:', error);
+            vscode.window.showErrorMessage(`Lỗi mở thư mục assignment: ${error.message}`);
+        }
+    }
+
+    private async _handleCloneAssignment(assignmentCode: string, repoUrl: string, title: string) {
+        try {
+            // Prompt user to select folder
+            const folderOptions = await vscode.window.showOpenDialog({
+                canSelectFiles: false,
+                canSelectFolders: true,
+                canSelectMany: false,
+                openLabel: 'Chọn thư mục để clone assignment repository'
+            });
+
+            if (!folderOptions || folderOptions.length === 0) {
+                return;
+            }
+
+            const localPath = folderOptions[0].fsPath;
+            
+            // Get assignment info from storage (teacher created it, so should have token)
+            const assignmentInfo = this._context.globalState.get(`assignment_${assignmentCode}`) as any;
+            
+            if (!assignmentInfo || !assignmentInfo.token) {
+                vscode.window.showErrorMessage('Không tìm thấy thông tin xác thực cho assignment này');
+                return;
+            }
+
+            // Clone repository
+            const folderName = `${assignmentCode}-teacher`;
+            const clonePath = path.join(localPath, folderName);
+
+            vscode.window.showInformationMessage('Đang clone repository...');
+            
+            await this.gitService.cloneRepository({
+                repoUrl: repoUrl,
+                branch: 'main',
+                token: assignmentInfo.token,
+                localPath: clonePath
+            });
+
+            // Open cloned folder
+            const uri = vscode.Uri.file(clonePath);
+            await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+
+            vscode.window.showInformationMessage('Repository đã được clone thành công!');
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Lỗi clone repository: ${error.message}`);
+        }
+    }
+
+    private async _handleOpenAssignmentFolder(localPath: string) {
+        try {
+            // Kiểm tra workspace hiện tại
+            const currentWorkspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            
+            // Normalize paths để so sánh (lowercase và thay \\ thành /)
+            const normalizedTarget = localPath.toLowerCase().replace(/\\/g, '/');
+            const normalizedCurrent = currentWorkspace?.toLowerCase().replace(/\\/g, '/');
+            
+            console.log('[DEBUG] Opening assignment folder:');
+            console.log('[DEBUG]   Target:', normalizedTarget);
+            console.log('[DEBUG]   Current:', normalizedCurrent);
+            
+            if (normalizedCurrent === normalizedTarget) {
+                console.log('[DEBUG] ✅ Already in correct workspace');
+                vscode.window.showInformationMessage('Bạn đã đang ở workspace của bài tập này!');
+                return;
+            }
+            
+            console.log('[DEBUG] ⚠️ Switching to workspace:', localPath);
+            const uri = vscode.Uri.file(localPath);
+            await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+        } catch (error: any) {
+            vscode.window.showErrorMessage(`Lỗi mở thư mục bài tập: ${error.message}`);
         }
     }
 
@@ -616,24 +1021,33 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     
     private async _handleLoadMyClasses() {
         try {
+            console.log('[Extension] _handleLoadMyClasses called');
             const result = await this.apiService.getMyClasses();
+            console.log('[Extension] API result:', result);
             
             // Get user role to determine which classes to send
             const userData = this._context.globalState.get<any>('user_data');
             const role = userData?.role || 'STUDENT';
+            console.log('[Extension] User role:', role);
             
+            let classesToSend = [];
             if (role === 'TEACHER') {
-                this._postMessage({
-                    type: 'classesLoaded',
-                    classes: result.teacherClasses
-                });
+                classesToSend = result.teacherClasses || [];
             } else {
-                this._postMessage({
-                    type: 'classesLoaded',
-                    classes: result.studentClasses
-                });
+                classesToSend = result.studentClasses || [];
             }
+            
+            console.log('[Extension] Sending classes:', classesToSend);
+            console.log('[Extension] Number of classes:', classesToSend.length);
+            
+            this._postMessage({
+                type: 'classesLoaded',
+                classes: classesToSend
+            });
+            
+            console.log('[Extension] Message posted to webview');
         } catch (error: any) {
+            console.error('[Extension] Error loading classes:', error);
             vscode.window.showErrorMessage(`Lỗi tải danh sách lớp: ${error.message}`);
         }
     }
@@ -754,7 +1168,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080 ws://localhost:8080;">
                 <title>Auto Submit</title>
             </head>
             <body>
@@ -807,6 +1221,30 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             });
             // Re-throw error so extension.ts can handle it
             throw error;
+        }
+    }
+    
+    public notifyWorkspaceChanged(assignmentCode: string) {
+        console.log('[ClassroomViewProvider] Notifying webview of workspace change:', assignmentCode);
+        this._postMessage({
+            type: 'currentWorkspaceInfo',
+            assignmentCode: assignmentCode,
+            role: 'student' // Will be updated from globalState if needed
+        });
+    }
+    
+    private async _handleGetCurrentWorkspace() {
+        try {
+            const currentClass = this._context.globalState.get<any>('current_class');
+            if (currentClass && currentClass.assignmentCode) {
+                this._postMessage({
+                    type: 'currentWorkspaceInfo',
+                    assignmentCode: currentClass.assignmentCode,
+                    role: currentClass.role
+                });
+            }
+        } catch (error) {
+            console.error('[ClassroomViewProvider] Failed to get current workspace:', error);
         }
     }
 }

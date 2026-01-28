@@ -3,9 +3,18 @@ import React from 'react';
 interface UserHeaderProps {
   user: any;
   onLogout: () => void;
+  onOpenChat?: () => void;
+  onOpenDashboard?: () => void;
+  currentView?: string | null;
 }
 
-const UserHeader: React.FC<UserHeaderProps> = ({ user, onLogout }) => {
+const UserHeader: React.FC<UserHeaderProps> = ({ 
+  user, 
+  onLogout, 
+  onOpenChat, 
+  onOpenDashboard,
+  currentView 
+}) => {
   return (
     <div style={styles.header}>
       <div style={styles.userInfo}>
@@ -19,9 +28,34 @@ const UserHeader: React.FC<UserHeaderProps> = ({ user, onLogout }) => {
           </div>
         </div>
       </div>
-      <button onClick={onLogout} style={styles.logoutButton}>
-        Đăng xuất
-      </button>
+      
+      <div style={styles.actions}>
+        {/* Navigation buttons */}
+        <div style={styles.navButtons}>
+          <button 
+            onClick={onOpenDashboard}
+            style={{
+              ...styles.navButton,
+              ...(currentView !== 'CHAT' ? styles.navButtonActive : {})
+            }}
+          >
+            🏠 Dashboard
+          </button>
+          <button 
+            onClick={onOpenChat}
+            style={{
+              ...styles.navButton,
+              ...(currentView === 'CHAT' ? styles.navButtonActive : {})
+            }}
+          >
+            💬 Chat
+          </button>
+        </div>
+        
+        <button onClick={onLogout} style={styles.logoutButton}>
+          Đăng xuất
+        </button>
+      </div>
     </div>
   );
 };
@@ -63,6 +97,32 @@ const styles = {
     fontSize: '12px',
     color: '#8e8e8e',
     fontWeight: '400',
+  },
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  navButtons: {
+    display: 'flex',
+    gap: '8px',
+  },
+  navButton: {
+    padding: '8px 16px',
+    backgroundColor: '#ffffff',
+    color: '#8e8e8e',
+    border: '1px solid #dbdbdb',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    outline: 'none',
+  } as React.CSSProperties,
+  navButtonActive: {
+    backgroundColor: '#0095f6',
+    color: '#ffffff',
+    borderColor: '#0095f6',
   },
   logoutButton: {
     padding: '8px 20px',

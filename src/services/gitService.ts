@@ -18,6 +18,7 @@ export class GitService {
     private repoUrl: string | null = null;
     private branch: string | null = null;
     private classCode: string | null = null;
+    private assignmentCode: string | null = null;
     private apiService: any = null;
 
     constructor() {}
@@ -195,6 +196,22 @@ export class GitService {
             if (!globalEmail.trim()) {
                 await this.git.addConfig('user.email', 'autogit@vscode.local', false);
             }
+
+            // Don't configure credential helper - use authenticated URL instead
+            // credential-cache doesn't work on Windows
+            
+            // Remove any existing credential helper config
+            try {
+                await this.git.raw(['config', '--unset', 'credential.helper']);
+                console.log('Removed credential helper config');
+            } catch (e) {
+                // Ignore if config doesn't exist
+            }
+            
+            // Explicitly disable credential helper to prevent Git from using system defaults
+            await this.git.addConfig('credential.helper', '', false);
+            console.log('Disabled credential helper');
+            
         } catch (error) {
             console.error('Failed to configure git:', error);
         }
@@ -225,6 +242,8 @@ export class GitService {
     setClassInfo(apiService: any, classCode: string): void {
         this.apiService = apiService;
         this.classCode = classCode;
+        // For assignment-based architecture, classCode is actually assignmentCode
+        this.assignmentCode = classCode;
     }
 
     /**
@@ -280,34 +299,68 @@ export class GitService {
             // Check if there are any changes
             const status = await this.git.status();
             
+            console.log('[DEBUG] Git status:', {
+                filesCount: status.files.length,
+                files: status.files.map(f => ({ path: f.path, status: f.working_dir })),
+                isClean: status.isClean()
+            });
+            
             if (status.files.length === 0) {
-                console.log('No changes to commit');
+                console.log('No changes to commit - repository is clean');
                 return;
             }
 
             // Add all changes
+            console.log('[DEBUG] Adding files to git...');
             await this.git.add('.');
 
             // Create commit message
             const timestamp = new Date().toISOString();
             const changedFiles = status.files.map(f => f.path).join(', ');
             const commitMessage = `Auto-commit: ${changedFiles} at ${timestamp}`;
+            
+            console.log('[DEBUG] Creating commit:', commitMessage);
 
             // Commit changes
             await this.git.commit(commitMessage);
+            console.log('[DEBUG] Commit created successfully');
 
             // Push to remote
+            console.log('[DEBUG] Push config:', {
+                hasToken: !!this.token,
+                tokenPrefix: this.token ? this.token.substring(0, 10) + '...' : 'null',
+                tokenLength: this.token ? this.token.length : 0,
+                tokenStartsWith: this.token ? this.token.substring(0, 4) : 'null',
+                repoUrl: this.repoUrl,
+                branch: this.branch
+            });
+            
             if (this.token && this.repoUrl && this.branch) {
                 const authenticatedUrl = this.buildAuthenticatedUrl(this.repoUrl, this.token);
+                console.log('[DEBUG] Authenticated URL:', authenticatedUrl.replace(this.token, '***TOKEN***'));
                 
                 // Set remote URL with token
                 await this.git.remote(['set-url', 'origin', authenticatedUrl]);
+                console.log('[DEBUG] Remote URL updated');
                 
                 try {
                     // Try to push
+                    console.log('[DEBUG] Attempting push to origin/' + this.branch);
                     await this.git.push('origin', this.branch);
-                    console.log(`Auto-pushed changes to ${this.branch}`);
+                    console.log(`✅ Auto-pushed changes to ${this.branch}`);
+                    
+                    // Update commit count in backend after successful push
+                    if (this.apiService && this.assignmentCode) {
+                        try {
+                            await this.apiService.updateAssignmentCommitCount(this.assignmentCode);
+                            console.log('[DEBUG] ✅ Commit count updated in backend');
+                        } catch (apiError) {
+                            console.error('[DEBUG] Failed to update commit count:', apiError);
+                            // Don't throw - push was successful, just log the error
+                        }
+                    }
                 } catch (pushError: any) {
+                    console.error('[DEBUG] Push error:', pushError.message);
                     // If push failed due to remote changes, pull and retry
                     if (pushError.message.includes('rejected') || pushError.message.includes('fetch first')) {
                         console.log('Push rejected, pulling remote changes first...');
@@ -320,6 +373,16 @@ export class GitService {
                             // Retry push
                             await this.git.push('origin', this.branch);
                             console.log(`Auto-pushed changes to ${this.branch} after pull`);
+                            
+                            // Update commit count in backend after successful push
+                            if (this.apiService && this.assignmentCode) {
+                                try {
+                                    await this.apiService.updateAssignmentCommitCount(this.assignmentCode);
+                                    console.log('[DEBUG] ✅ Commit count updated in backend after pull');
+                                } catch (apiError) {
+                                    console.error('[DEBUG] Failed to update commit count:', apiError);
+                                }
+                            }
                         } catch (pullError: any) {
                             console.error('Failed to pull and push:', pullError);
                             throw new Error(`Failed to sync with remote: ${pullError.message}`);

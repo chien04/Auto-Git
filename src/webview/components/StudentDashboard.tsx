@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import StudentList from './StudentList';
 import { StudentStatsCard } from './StudentStatsCard';
 import { CommitHeatmap } from './CommitHeatmap';
+import StudentForm from './StudentForm';
+import AssignmentList from './AssignmentList';
+import BottomNavigation from './BottomNavigation';
 
 interface StudentDashboardProps {
   vscode: any;
@@ -13,17 +16,22 @@ interface ClassItem {
   classId: string;
   className: string;
   classCode: string;
-  repoUrl: string;
-  branchName: string;
-  deadline?: string;
+  assignmentCount?: number;
 }
 
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiService }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+  const [viewAssignments, setViewAssignments] = useState(false);
+  const [currentAssignmentCode, setCurrentAssignmentCode] = useState<string | undefined>(undefined);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'settings'>('dashboard');
+  const [isViewingAssignmentDetail, setIsViewingAssignmentDetail] = useState(false);
 
   useEffect(() => {
+    // Request current workspace info from extension
+    vscode.postMessage({ type: 'getCurrentWorkspace' });
+    
     // Listen for messages from extension
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
@@ -38,6 +46,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
         case 'classLeft':
           vscode.postMessage({ type: 'loadMyClasses' });
           break;
+        case 'currentWorkspaceInfo':
+          if (message.assignmentCode) {
+            setCurrentAssignmentCode(message.assignmentCode);
+          }
+          break;
       }
     };
 
@@ -50,13 +63,10 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   }, [vscode]);
 
   const handleLeaveClass = (classItem: ClassItem) => {
-    console.log('Leave button clicked for class:', classItem);
-    console.log('Sending leaveClass message:', classItem.classCode);
     vscode.postMessage({ 
       type: 'leaveClass', 
       classCode: classItem.classCode,
-      className: classItem.className,
-      branchName: classItem.branchName
+      className: classItem.className
     });
   };
 
@@ -66,17 +76,91 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
 
   if (showJoinForm) {
     return (
-      <div style={styles.container}>
-        <button 
-          onClick={() => {
-            setShowJoinForm(false);
-            vscode.postMessage({ type: 'loadMyClasses' });
-          }} 
-          style={styles.backButton}
-        >
-          ←
-        </button>
-        <StudentForm vscode={vscode} />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+          <StudentForm 
+            vscode={vscode}
+            user={user}
+            onClose={() => {
+              setShowJoinForm(false);
+              vscode.postMessage({ type: 'loadMyClasses' });
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedClass && viewAssignments) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+          {/* Header */}
+          <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+                  <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
+                </svg>
+              </div>
+              <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
+              <div className="w-px h-4 bg-[#dbdfe6]"></div>
+              <button 
+                onClick={() => vscode.postMessage({ type: 'logout' })}
+                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors" 
+                title="Đăng xuất"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          {/* Back Button and Class Info - Hidden when viewing assignment detail */}
+          {!isViewingAssignmentDetail && (
+            <>
+              <div className="px-4 py-4">
+                <button
+                  onClick={() => {
+                    setViewAssignments(false);
+                    setSelectedClass(null);
+                  }}
+                  className="flex items-center gap-2 text-[#616f89] hover:text-[#111318] transition-colors text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Quay lại
+                </button>
+              </div>
+
+              <div className="px-4 py-5 border-b border-[#dbdfe6]">
+                <h2 className="text-2xl font-bold tracking-tight text-[#111318] mb-1">{selectedClass.className}</h2>
+                <p className="text-sm text-[#616f89]">Mã lớp: <strong className="font-mono font-bold">{selectedClass.classCode}</strong></p>
+              </div>
+            </>
+          )}
+
+          {/* Assignments */}
+          <div className="flex-1 overflow-y-auto pb-24">
+            <AssignmentList
+              vscode={vscode}
+              apiService={apiService}
+              classCode={selectedClass.classCode}
+              className={selectedClass.className}
+              isTeacher={false}
+              currentAssignmentCode={currentAssignmentCode}
+              onViewChange={(isDetailView) => setIsViewingAssignmentDetail(isDetailView)}
+            />
+          </div>
+
+          {/* Bottom Navigation */}
+          <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        </div>
       </div>
     );
   }
@@ -94,248 +178,135 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   }
 
   return (
-    <div style={styles.container}>
-      <StudentStatsCard apiService={apiService} />
-      
-      <div style={styles.header}>
-        <h2 style={styles.title}>Lớp học của tôi</h2>
-        <button onClick={() => setShowJoinForm(true)} style={styles.joinButton}>
-          + Tham gia lớp
-        </button>
-      </div>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+        {/* Header */}
+        <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
+              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+                <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
+              </svg>
+            </div>
+            <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
+            <div className="w-px h-4 bg-[#dbdfe6]"></div>
+            <button 
+              onClick={() => vscode.postMessage({ type: 'logout' })}
+              className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors" 
+              title="Đăng xuất"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          </div>
+        </header>
 
-      {classes.length === 0 ? (
-        <div style={styles.empty}>
-          <p style={styles.emptyText}>Bạn chưa tham gia lớp học nào</p>
-          <button onClick={() => setShowJoinForm(true)} style={styles.joinButtonLarge}>
-            + Tham gia lớp học
-          </button>
+        {/* Page Heading */}
+        <div className="pt-8 px-6 pb-6 border-b border-[#dbdfe6]">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-3xl font-black leading-tight tracking-tight text-[#111318]">Dashboard</h2>
+            <p className="text-[#616f89] text-sm font-medium">Student Overview</p>
+          </div>
         </div>
-      ) : (
-        <>
-          <div style={styles.classList}>
-            {classes.map((classItem) => (
-              <div key={classItem.classId} style={styles.classCard}>
-                <div style={styles.cardHeader}>
-                  <h3 style={styles.cardTitle}>{classItem.className}</h3>
-                  <button
-                    onClick={() => handleLeaveClass(classItem)}
-                    style={styles.leaveButton}
-                    title="Rời lớp"
+
+        {/* Main Content */}
+        <main className="flex-1 flex flex-col gap-8 pb-24 overflow-y-auto">
+          {/* Join Class Button */}
+          <section className="px-6 pt-6">
+            <button
+              onClick={() => setShowJoinForm(true)}
+              className="w-full bg-[#135bec] text-white h-12 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Tham gia lớp học
+            </button>
+          </section>
+
+          {/* My Classes Section */}
+          <section className="px-6">
+            <div className="flex items-center justify-between pb-4">
+              <h3 className="text-lg font-bold leading-tight tracking-tight text-[#111318]">
+                Lớp học của tôi ({classes.length})
+              </h3>
+            </div>
+
+            {classes.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-[#616f89] mb-6 text-sm">Bạn chưa tham gia lớp học nào</p>
+                <button
+                  onClick={() => setShowJoinForm(true)}
+                  className="px-8 py-3.5 bg-[#135bec] text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity"
+                >
+                  + Tham gia lớp học đầu tiên
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {classes.map((classItem) => (
+                  <div
+                    key={classItem.classId}
+                    onClick={() => {
+                      setSelectedClass(classItem);
+                      setViewAssignments(true);
+                    }}
+                    className="group relative flex items-center justify-between p-4 bg-white border border-[#dbdfe6] rounded-xl hover:border-[#111318] transition-colors cursor-pointer"
                   >
-                    Rời lớp
-                  </button>
-                </div>
-                <div style={styles.cardBody}>
-                  {classItem.deadline && (
-                    <>
-                      <p style={styles.cardInfo}>
-                        <strong>Deadline:</strong> {new Date(classItem.deadline).toLocaleString('vi-VN', {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                      {new Date(classItem.deadline) < new Date() && (
-                        <p style={styles.cardInfoExpired}>
-                          <strong>Đã hết hạn</strong>
-                        </p>
-                      )}
-                    </>
-                  )}
-                  <p style={styles.cardInfo}>
-                    <strong>Mã lớp:</strong> {classItem.classCode}
-                  </p>
-                  <p style={styles.cardInfo}>
-                    <strong>Branch của bạn:</strong> {classItem.branchName}
-                  </p>
-                  <div style={styles.cardActions}>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-[#616f89] uppercase tracking-widest">
+                        {classItem.classCode}
+                      </span>
+                      <h4 className="font-bold text-base text-[#111318]">{classItem.className}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="w-2 h-2 rounded-full bg-[#111318]"></span>
+                        <span className="text-xs text-[#616f89]">
+                          {classItem.assignmentCount || 0} Bài tập
+                        </span>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => {
-                        setSelectedClass(classItem);
-                        // Open folder when viewing class details
-                        vscode.postMessage({ type: 'openClassFolder', classCode: classItem.classCode });
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLeaveClass(classItem);
                       }}
-                      style={styles.viewClassButton}
+                      className="p-2 text-[#dbdfe6] hover:text-red-600 transition-colors"
+                      title="Rời lớp"
                     >
-                      Xem lớp học
-                    </button>
-                    <button
-                      onClick={() => handleOpenRepo(classItem.repoUrl)}
-                      style={styles.repoButton}
-                    >
-                      Mở Repository
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
                     </button>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          
-          <CommitHeatmap apiService={apiService} />
-        </>
-      )}
+            )}
+          </section>
+
+          {/* Activity Section */}
+          {classes.length > 0 && (
+            <section className="px-6">
+              <CommitHeatmap apiService={apiService} />
+            </section>
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="p-6 border-t border-[#dbdfe6] flex justify-center bg-gray-50/50">
+          <span className="text-[10px] text-[#616f89] font-bold uppercase tracking-widest">
+            AutoGit VS Code Extension v1.0
+          </span>
+        </footer>
+
+        {/* Bottom Navigation */}
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
     </div>
   );
-};
-
-// Import StudentForm from existing file
-import StudentForm from './StudentForm';
-
-const styles = {
-  container: {
-    padding: '24px',
-    backgroundColor: '#fafafa',
-    minHeight: '100vh',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '32px',
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '700',
-    margin: 0,
-    color: '#000',
-    letterSpacing: '-0.5px',
-  },
-  joinButton: {
-    padding: '12px 24px',
-    backgroundColor: '#000',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontWeight: '600',
-    fontSize: '14px',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  classList: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: '16px',
-  },
-  classCard: {
-    backgroundColor: '#fff',
-    border: '1px solid #dbdbdb',
-    borderRadius: '16px',
-    padding: '24px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-    transition: 'all 0.15s ease',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '16px',
-  },
-  cardTitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    margin: 0,
-    flex: 1,
-    color: '#262626',
-    letterSpacing: '-0.2px',
-  },
-  leaveButton: {
-    padding: '8px 16px',
-    backgroundColor: '#fff',
-    color: '#262626',
-    border: '1px solid #dbdbdb',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '600',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  cardBody: {
-    marginTop: '12px',
-  },
-  cardInfo: {
-    fontSize: '13px',
-    margin: '8px 0',
-    color: '#8e8e8e',
-    fontWeight: '400',
-  },
-  cardInfoExpired: {
-    fontSize: '13px',
-    margin: '8px 0',
-    color: '#dc3545',
-    fontWeight: '700',
-  },
-  cardActions: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '16px',
-  },
-  viewClassButton: {
-    flex: 1,
-    padding: '12px',
-    backgroundColor: '#0095f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  repoButton: {
-    flex: 1,
-    padding: '12px',
-    backgroundColor: '#000',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '600',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  empty: {
-    textAlign: 'center' as const,
-    padding: '80px 20px',
-  },
-  emptyText: {
-    fontSize: '15px',
-    color: '#8e8e8e',
-    marginBottom: '24px',
-    fontWeight: '400',
-  },
-  joinButtonLarge: {
-    padding: '14px 32px',
-    backgroundColor: '#000',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontSize: '15px',
-    fontWeight: '600',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
-  backButton: {
-    padding: '10px 20px',
-    backgroundColor: '#fff',
-    color: '#262626',
-    border: '1px solid #dbdbdb',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    marginBottom: '24px',
-    fontWeight: '600',
-    fontSize: '14px',
-    transition: 'all 0.15s ease',
-    outline: 'none',
-  },
 };
 
 export default StudentDashboard;

@@ -9,7 +9,7 @@ const RoleSelection: React.FC<RoleSelectionProps> = ({ onSelectRole }) => {
     <div style={styles.container}>
       <div style={styles.content}>
         <div style={styles.header}>
-          <h1 style={styles.title}>Auto Submit</h1>
+          <h1 style={styles.title}>UET-CodingRooms</h1>
           <p style={styles.subtitle}>Quản lý lớp học dễ dàng</p>
         </div>
 

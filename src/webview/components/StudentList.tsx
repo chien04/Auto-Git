@@ -159,6 +159,21 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
           <h2 style={styles.title}>{classItem.className}</h2>
           <p style={styles.subtitle}>Mã lớp: {classItem.classCode}</p>
         </div>
+        <button
+          onClick={() => {
+            vscode.postMessage({
+              type: 'openChat',
+              config: {
+                classroomId: parseInt(classItem.classId),
+                classroomName: classItem.className,
+                chatType: 'CLASS_GROUP'
+              }
+            });
+          }}
+          style={styles.chatGroupButton}
+        >
+          💬 Chat nhóm
+        </button>
       </div>
 
       {students.length === 0 ? (
@@ -203,23 +218,59 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm(`Xóa sinh viên ${student.studentName} khỏi lớp?`)) {
+                  <div style={styles.buttonGroup}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         vscode.postMessage({
-                          type: 'removeStudent',
-                          classCode: classItem.classCode,
-                          studentId: student.studentId,
-                          studentName: student.studentName
+                          type: 'openChat',
+                          config: {
+                            otherUserId: parseInt(student.userId),
+                            otherUserName: student.studentName,
+                            chatType: 'PRIVATE'
+                          }
                         });
-                      }
-                    }}
-                    style={styles.removeButton}
-                  >
-                    Xóa
-                  </button>
+                      }}
+                      style={styles.chatButton}
+                    >
+                      💬 Chat
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Xóa sinh viên ${student.studentName} khỏi lớp?`)) {
+                          vscode.postMessage({
+                            type: 'removeStudent',
+                            classCode: classItem.classCode,
+                            studentId: student.studentId,
+                            studentName: student.studentName
+                          });
+                        }
+                      }}
+                      style={styles.removeButton}
+                    >
+                      Xóa
+                    </button>
+                  </div>
                 </>
+              )}
+              {userRole === 'STUDENT' && !isCurrent && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    vscode.postMessage({
+                      type: 'openChat',
+                      config: {
+                        otherUserId: parseInt(student.userId),
+                        otherUserName: student.studentName,
+                        chatType: 'PRIVATE'
+                      }
+                    });
+                  }}
+                  style={styles.chatButton}
+                >
+                  💬 Chat
+                </button>
               )}
             </div>
           );
@@ -263,6 +314,19 @@ const styles = {
     fontSize: '14px',
     color: '#8e8e8e',
     margin: 0,
+  },
+  chatGroupButton: {
+    padding: '12px 24px',
+    backgroundColor: '#0095f6',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    outline: 'none',
+    whiteSpace: 'nowrap' as const,
   },
   empty: {
     textAlign: 'center' as const,
@@ -328,9 +392,26 @@ const styles = {
     color: '#8e8e8e',
     fontWeight: '500',
   },
-  removeButton: {
-    width: '100%',
+  buttonGroup: {
+    display: 'flex',
+    gap: '8px',
     marginTop: '12px',
+  },
+  chatButton: {
+    flex: 1,
+    padding: '10px',
+    backgroundColor: '#0095f6',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '10px',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    outline: 'none',
+  },
+  removeButton: {
+    flex: 1,
     padding: '10px',
     backgroundColor: '#fff',
     color: '#ed4956',

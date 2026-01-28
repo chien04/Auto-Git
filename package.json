@@ -55,13 +55,17 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.2.1",
+    "@types/sockjs-client": "^1.5.4",
     "axios": "^1.6.0",
     "lucide-react": "^0.556.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "simple-git": "^3.25.0"
+    "simple-git": "^3.25.0",
+    "sockjs-client": "^1.6.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/react": "^19.2.7",
@@ -69,10 +73,14 @@
     "@types/vscode": "^1.106.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "autoprefixer": "^10.4.23",
     "css-loader": "^7.1.2",
     "eslint": "^9.39.1",
     "html-webpack-plugin": "^5.6.5",
+    "postcss": "^8.5.6",
+    "postcss-loader": "^8.2.0",
     "style-loader": "^4.0.0",
+    "tailwindcss": "^4.1.18",
     "ts-loader": "^9.5.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3",

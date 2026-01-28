@@ -181,7 +181,7 @@ const styles: Record<string, React.CSSProperties> = {
     dayLabel: {
         fontSize: '11px',
         color: '#8e8e8e',
-        width: '14px',
+        width: '16px',
         textAlign: 'center',
     },
     grid: {
@@ -194,8 +194,8 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '4px',
     },
     day: {
-        width: '14px',
-        height: '14px',
+        width: '16px',
+        height: '16px',
         borderRadius: '2px',
         border: '1px solid #e1e4e8',
     },

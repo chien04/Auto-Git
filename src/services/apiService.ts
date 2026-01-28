@@ -11,18 +11,28 @@ export interface LoginResponse {
 export interface CreateClassResponse {
     classId: string;
     classCode: string;
-    repoUrl: string;
     className: string;
-    token: string;
-    branch: string;
-    deadline?: string;
 }
 
 export interface JoinClassResponse {
+    studentId: string;
+}
+
+export interface CreateAssignmentResponse {
+    assignmentId: string;
+    assignmentCode: string;
+    title: string;
+    repoUrl: string;
+    token: string;
+    deadline?: string;
+}
+
+export interface JoinAssignmentResponse {
     repoUrl: string;
     branch: string;
     token: string;
     studentId: string;
+    assignmentTitle: string;
     deadline?: string;
 }
 
@@ -75,12 +85,30 @@ export class ApiService {
             }
         });
 
-        // Add request interceptor to include JWT token
+        // Add request interceptor to include JWT token and log API calls
         this.api.interceptors.request.use(
             (config) => {
                 if (this.jwtToken) {
                     config.headers.Authorization = `Bearer ${this.jwtToken}`;
                 }
+                
+                // Log API call for debugging
+                const method = (config.method || 'GET').toUpperCase();
+                const url = config.url || '';
+                const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+                
+                console.log(`🌐 [API ${method}] ${fullUrl}`);
+                
+                // Log payload if exists
+                if (config.data) {
+                    console.log(`📤 [Payload]`, config.data);
+                }
+                
+                // Log query params if exists
+                if (config.params) {
+                    console.log(`📤 [Params]`, config.params);
+                }
+                
                 return config;
             },
             (error) => {
@@ -125,15 +153,11 @@ export class ApiService {
     }
 
     /**
-     * Teacher: Create a new class and repository
+     * Teacher: Create a new class (no repository)
      */
-    async createClass(className: string, localPath: string, deadline?: string): Promise<CreateClassResponse> {
+    async createClass(className: string): Promise<CreateClassResponse> {
         try {
-            const response = await this.api.post('/class/create', { 
-                className, 
-                localPath,
-                deadline: deadline || null
-            });
+            const response = await this.api.post('/class/create', { className });
             return response.data;
         } catch (error: any) {
             throw new Error(`Failed to create class: ${error.response?.data?.message || error.message}`);
@@ -143,16 +167,111 @@ export class ApiService {
     /**
      * Student: Join a class using class code
      */
-    async joinClass(studentName: string, classCode: string, localPath: string): Promise<JoinClassResponse> {
+    async joinClass(studentName: string, classCode: string): Promise<JoinClassResponse> {
         try {
             const response = await this.api.post('/class/join', {
                 studentName,
-                classCode,
-                localPath
+                classCode
             });
             return response.data;
         } catch (error: any) {
             throw new Error(`Failed to join class: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Teacher: Create a new assignment in a class
+     */
+    async createAssignment(classCode: string, title: string, description: string, deadline?: string): Promise<CreateAssignmentResponse> {
+        try {
+            const response = await this.api.post('/assignment/create', {
+                classCode,
+                title,
+                description,
+                deadline: deadline || null
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to create assignment: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Student: Join an assignment
+     */
+    async joinAssignment(assignmentCode: string, localPath: string): Promise<JoinAssignmentResponse> {
+        try {
+            const response = await this.api.post('/assignment/join', {
+                assignmentCode,
+                localPath
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to join assignment: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Update assignment local path after clone
+     */
+    async updateAssignmentLocalPath(assignmentCode: string, localPath: string): Promise<void> {
+        try {
+            await this.api.patch(`/assignment/${assignmentCode}/local-path`, { localPath });
+        } catch (error: any) {
+            throw new Error(`Failed to update local path: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Update commit count for student assignment (called after push)
+     */
+    async updateAssignmentCommitCount(assignmentCode: string): Promise<void> {
+        try {
+            console.log('[API] Updating commit count for assignment:', assignmentCode);
+            await this.api.post(`/assignment/${assignmentCode}/update-commits`);
+            console.log('[API] ✅ Commit count updated successfully');
+        } catch (error: any) {
+            console.error('[API] Failed to update commit count:', error);
+            throw new Error(`Failed to update commit count: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Get all assignments in a class
+     */
+    async getAssignments(classCode: string): Promise<any[]> {
+        try {
+            const response = await this.api.get(`/assignment/class/${classCode}`);
+            console.log(`[DEBUG] getAssignments response for ${classCode}:`, JSON.stringify(response.data, null, 2));
+            response.data.forEach((assignment: any) => {
+                console.log(`[DEBUG] Assignment ${assignment.assignmentCode}: joined=${assignment.joined}, localPath=${assignment.localPath}`);
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to get assignments: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Get students in an assignment
+     */
+    async getAssignmentStudents(assignmentCode: string): Promise<any[]> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}/students`);
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to get assignment students: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Delete an assignment
+     */
+    async deleteAssignment(assignmentCode: string): Promise<void> {
+        try {
+            await this.api.delete(`/assignment/${assignmentCode}`);
+        } catch (error: any) {
+            throw new Error(`Failed to delete assignment: ${error.response?.data?.message || error.message}`);
         }
     }
 
@@ -367,6 +486,75 @@ export class ApiService {
     }
 
     /**
+     * Setup assignment workspace (Teacher only)
+     */
+    async setupAssignmentWorkspace(assignmentCode: string): Promise<{ message: string, workspacePath: string }> {
+        try {
+            console.log('[API] Setting up assignment workspace:', assignmentCode);
+            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/setup`);
+            console.log('[API] Setup workspace response:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Setup workspace error:', error);
+            throw new Error(`Failed to setup workspace: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Sync assignment workspace (Teacher only)
+     */
+    async syncAssignmentWorkspace(assignmentCode: string): Promise<{ message: string }> {
+        try {
+            console.log('[API] Syncing assignment workspace:', assignmentCode);
+            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/sync`);
+            console.log('[API] Sync workspace response:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Sync workspace error:', error);
+            throw new Error(`Failed to sync workspace: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Get assignment workspace path (Teacher only)
+     */
+    async getAssignmentWorkspacePath(assignmentCode: string): Promise<{ workspacePath: string, exists: boolean }> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}/workspace/path`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Get workspace path error:', error);
+            throw new Error(`Failed to get workspace path: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Save teacher's local path for assignment
+     */
+    async saveTeacherLocalPath(assignmentCode: string, localPath: string): Promise<{ message: string, localPath: string, role: string }> {
+        try {
+            const response = await this.api.post(`/assignment/${assignmentCode}/teacher/localPath`, { localPath });
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Save teacher local path error:', error);
+            throw new Error(`Failed to save local path: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
+     * Get teacher's local path for assignment
+     */
+    async getTeacherLocalPath(assignmentCode: string): Promise<{ localPath: string, exists: boolean }> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}/teacher/localPath`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Get teacher local path error:', error);
+            throw new Error(`Failed to get local path: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    /**
      * Remove student from class (Teacher only)
      */
     async removeStudent(classCode: string, studentId: string): Promise<{ message: string }> {
@@ -449,4 +637,27 @@ export class ApiService {
         const response = await this.api.get('/dashboard/teacher/classes');
         return response.data;
     }
+
+    /**
+     * Get assignment submissions (list of students with their submission info)
+     */
+    async getAssignmentSubmissions(assignmentCode: string): Promise<StudentSubmissionDTO[]> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}/submissions`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Get assignment submissions ERROR:', error);
+            throw new Error(`Failed to get submissions: ${error.response?.data?.error || error.message}`);
+        }
+    }
+}
+
+export interface StudentSubmissionDTO {
+    studentId: number;
+    studentName: string;
+    studentCode: string;
+    email: string;
+    commitCount: number;  // Số lần nộp (Att.)
+    lastCommitAt: string | null;  // Lần nộp cuối cùng
+    score: number | null;  // Điểm (0-10)
 }

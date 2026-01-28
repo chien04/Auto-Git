@@ -65,6 +65,34 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Restore git service state if student has joined a class
 	restoreGitServiceState(context);
+	
+	// Listen for workspace folder changes to update UI
+	vscode.workspace.onDidChangeWorkspaceFolders(() => {
+		console.log('[DEBUG] Workspace folders changed, restoring state...');
+		restoreGitServiceState(context);
+		notifyFrontendOfCurrentWorkspace(context);
+	});
+}
+
+function notifyFrontendOfCurrentWorkspace(context: vscode.ExtensionContext) {
+	try {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			return;
+		}
+		
+		const folderName = workspaceFolders[0].uri.fsPath.split(/[\\/]/).pop() || '';
+		const assignmentCode = folderName.split('-')[0]; // First part is assignment code
+		
+		console.log('[DEBUG] Notifying frontend of current workspace:', assignmentCode);
+		
+		// Send to webview if it exists
+		if (classroomViewProvider) {
+			classroomViewProvider.notifyWorkspaceChanged(assignmentCode);
+		}
+	} catch (error) {
+		console.error('[DEBUG] Error notifying frontend:', error);
+	}
 }
 
 function setupAutoPush(context: vscode.ExtensionContext) {
@@ -170,52 +198,94 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 					
 					// Determine role from branch name
 					let role = 'student';
-					if (branch === 'teacher') {
+					let assignmentCode = '';
+					
+					if (branch === 'main' || branch === 'master' || branch === 'teacher') {
 						role = 'teacher';
 					} else if (branch.startsWith('student/')) {
 						role = 'student';
 					}
 					
-					// Get class code from folder name
-					let classCode = '';
-					const match = folderName.match(/^([A-Z0-9]+)-/);
-					if (match) {
-						classCode = match[1];
+					// Get assignment code from folder name
+					// Format: {assignmentCode}-{branch} or {classCode}-{assignmentCode} (teacher)
+					const folderParts = folderName.split('-');
+					if (folderParts.length > 0) {
+						assignmentCode = folderParts[0]; // First part is assignment code
 					}
 					
+					// For teacher, if it's classCode-assignmentCode format, get the second part
+					if (role === 'teacher' && folderParts.length >= 2) {
+						assignmentCode = folderParts[1]; // Second part is assignment code
+					}
+					
+					console.log('Detected assignment code:', assignmentCode, 'role:', role, 'branch:', branch);
+					
 					// Try to get saved token from globalState
-					const classInfo = context.globalState.get<any>('current_class');
-					const savedToken = classInfo?.token || token;
+					// For assignment: student_assignment_{assignmentCode} or assignment_{assignmentCode}
+					let savedInfo = null;
+					let savedToken = null;
+					
+					if (role === 'student' && assignmentCode) {
+						const key = `student_assignment_${assignmentCode}`;
+						savedInfo = context.globalState.get<any>(key);
+						console.log(`[DEBUG] Looking for student token with key: ${key}`);
+						console.log('[DEBUG] Found savedInfo:', savedInfo ? 'YES' : 'NO');
+					} else if (role === 'teacher' && assignmentCode) {
+						const key = `assignment_${assignmentCode}`;
+						savedInfo = context.globalState.get<any>(key);
+						console.log(`[DEBUG] Looking for teacher token with key: ${key}`);
+						console.log('[DEBUG] Found savedInfo:', savedInfo ? 'YES' : 'NO');
+					}
+					
+					// Fallback to current_class for old format
+					if (!savedInfo) {
+						console.log('[DEBUG] savedInfo not found, trying current_class fallback');
+						savedInfo = context.globalState.get<any>('current_class');
+						console.log('[DEBUG] Fallback current_class:', savedInfo ? 'YES' : 'NO');
+					}
+					
+					savedToken = savedInfo?.token || token;
+					console.log('[DEBUG] Final token for git service:', savedToken ? 'EXISTS (length: ' + savedToken.length + ')' : 'NULL');
 					
 					if (savedToken) {
+						console.log('[DEBUG] Initializing git service with token...');
 						// Update globalState with current workspace info
-						await context.globalState.update('current_class', {
-							classCode: classCode,
+						const currentInfo = {
+							assignmentCode: assignmentCode,
 							repoUrl: repoUrl,
 							branch: branch,
 							token: savedToken,
 							role: role,
-							deadline: classInfo?.deadline
-						});
+							deadline: savedInfo?.deadline
+						};
+						
+						await context.globalState.update('current_class', currentInfo);
+						console.log('[DEBUG] Updated current_class in globalState');
 						
 						// Initialize git service with detected credentials
+						console.log('[DEBUG] Calling gitService.initializeWorkspace with:', {
+							workspacePath,
+							hasToken: !!savedToken,
+							repoUrl,
+							branch
+						});
 						await gitService.initializeWorkspace(workspacePath, {
 							token: savedToken,
 							repoUrl: repoUrl,
 							branch: branch
 						});
 						
-						// Set class info for deadline check (student only)
-						if (role === 'student' && classCode) {
-							gitService.setClassInfo(apiService, classCode);
+						// Set assignment info for deadline check (student only)
+						if (role === 'student' && assignmentCode) {
+							gitService.setClassInfo(apiService, assignmentCode);
 						}
 						
 						// Enable auto-push
 						gitService.enableAutoPush();
 						
-						console.log(`Git service restored: role=${role}, branch=${branch}, classCode=${classCode}`);
+						console.log(`✅ Git service restored: role=${role}, branch=${branch}, assignmentCode=${assignmentCode}, token exists: ${!!savedToken}`);
 					} else {
-						console.warn('No token found, auto-push disabled');
+						console.warn('⚠️ No token found, auto-push disabled');
 						await gitService.initializeWorkspace(workspacePath);
 					}
 				}
