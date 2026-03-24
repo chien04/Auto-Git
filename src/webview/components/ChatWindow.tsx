@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
 import { ChatMessage, MessageType, getWebSocketService } from '../services/websocketService';
 
 interface ChatWindowProps {
+  vscode: any;
   currentUserId: number;
   currentUserName: string;
   otherUserId?: number;
@@ -10,11 +10,11 @@ interface ChatWindowProps {
   classroomId?: number;
   classroomName?: string;
   chatType: MessageType;
-  token: string;
   onClose: () => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
+  vscode,
   currentUserId,
   currentUserName,
   otherUserId,
@@ -22,7 +22,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   classroomId,
   classroomName,
   chatType,
-  token,
   onClose
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -55,7 +54,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Load message history
   useEffect(() => {
+    // Set up listener for message history responses
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg && msg.type === 'privateMessagesLoaded' && msg.otherUserId === otherUserId) {
+        const data: ChatMessage[] = msg.messages || [];
+        setMessages(data);
+        setLoading(false);
+        // Mark unread messages as read
+        const unread = data.filter((m: any) => m.senderId === otherUserId && !m.isRead);
+        for (const m of unread) { markAsRead(m.id); }
+        if (unread.length > 0) { window.parent.postMessage({ type: 'newMessage' }, '*'); }
+      } else if (msg && msg.type === 'classMessagesLoaded' && msg.classroomId === classroomId) {
+        setMessages(msg.messages || []);
+        setLoading(false);
+      }
+    };
+    window.addEventListener('message', handleMessage);
     loadMessageHistory();
+    return () => { window.removeEventListener('message', handleMessage); };
   }, [otherUserId, classroomId]);
 
   // Subscribe to WebSocket messages via GLOBAL LISTENER (no direct subscription)
@@ -163,64 +180,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     scrollToBottom();
   }, [messages]);
 
-  const loadMessageHistory = async () => {
-    try {
-      setLoading(true);
-      let response;
-      
-      if (chatType === MessageType.PRIVATE && otherUserId) {
-        response = await axios.get(
-          `http://localhost:8080/api/messages/private/${otherUserId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-        
-        // Mark all messages from other user as read
-        if (response && response.data) {
-          const unreadMessages = response.data.filter(
-            (m: any) => m.senderId === otherUserId && !m.isRead
-          );
-          for (const msg of unreadMessages) {
-            await markAsRead(msg.id);
-          }
-          
-          // Trigger refresh in ChatView to clear unread badge
-          if (unreadMessages.length > 0) {
-            window.parent.postMessage({ type: 'newMessage' }, '*');
-          }
-        }
-      } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
-        response = await axios.get(
-          `http://localhost:8080/api/messages/class/${classroomId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
-      }
-      
-      if (response) {
-        setMessages(response.data);
-      }
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    } finally {
+  const loadMessageHistory = () => {
+    setLoading(true);
+    if (chatType === MessageType.PRIVATE && otherUserId) {
+      vscode.postMessage({ type: 'getPrivateMessages', otherUserId });
+    } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
+      vscode.postMessage({ type: 'getClassMessages', classroomId });
+    } else {
       setLoading(false);
     }
   };
 
-  const markAsRead = async (messageId: number) => {
-    try {
-      await axios.post(
-        `http://localhost:8080/api/messages/${messageId}/read`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-    } catch (error) {
-      console.error('Error marking message as read:', error);
-    }
+  const markAsRead = (messageId: number) => {
+    vscode.postMessage({ type: 'markMessageAsRead', messageId });
   };
 
   const handleSendMessage = () => {

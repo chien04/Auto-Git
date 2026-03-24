@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 interface StatsCardProps {
+    vscode: any;
     apiService: any;
 }
 
@@ -11,23 +12,31 @@ interface DashboardData {
     activeClasses: number;
 }
 
-export const StudentStatsCard: React.FC<StatsCardProps> = ({ apiService }) => {
+export const StudentStatsCard: React.FC<StatsCardProps> = ({ vscode, apiService }) => {
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadStats();
+
+        // Listen for messages from extension
+        const handleMessage = (event: MessageEvent) => {
+            const message = event.data;
+            if (message.type === 'studentDashboardLoaded') {
+                setData(message.dashboard);
+                setLoading(false);
+            } else if (message.type === 'studentDashboardError') {
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    const loadStats = async () => {
-        try {
-            const dashboard = await apiService.getStudentDashboard();
-            setData(dashboard);
-        } catch (error) {
-            console.error('Failed to load stats:', error);
-        } finally {
-            setLoading(false);
-        }
+    const loadStats = () => {
+        setLoading(true);
+        vscode.postMessage({ type: 'getStudentDashboard' });
     };
 
     const formatLastCommit = (dateString: string | null) => {

@@ -238,14 +238,13 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (window.confirm(`Xóa sinh viên ${student.studentName} khỏi lớp?`)) {
-                          vscode.postMessage({
-                            type: 'removeStudent',
-                            classCode: classItem.classCode,
-                            studentId: student.studentId,
-                            studentName: student.studentName
-                          });
-                        }
+                        // Send message to provider which will show VS Code confirmation dialog
+                        vscode.postMessage({
+                          type: 'removeStudent',
+                          classCode: classItem.classCode,
+                          studentId: student.studentId,
+                          studentName: student.studentName
+                        });
                       }}
                       style={styles.removeButton}
                     >

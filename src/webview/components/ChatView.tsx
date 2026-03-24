@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 
 interface ChatViewProps {
   vscode: any;
   currentUser: any;
-  token: string;
   onOpenChat: (config: any) => void;
   onChatClosed?: () => void;
 }
@@ -26,7 +24,7 @@ interface RecentPrivateChat {
   unreadCount?: number;
 }
 
-const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, token, onOpenChat, onChatClosed }) => {
+const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, onChatClosed }) => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [recentPrivateChats, setRecentPrivateChats] = useState<RecentPrivateChat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,15 +37,19 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, token, onOpenC
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       
-      if (message && message.type === 'classesLoaded') {
-        console.log('[ChatView] ✓ Received classesLoaded from extension');
-        console.log('[ChatView] Classes array:', message.classes);
-        
-        if (message.classes && Array.isArray(message.classes)) {
-          console.log('[ChatView] Setting', message.classes.length, 'classes');
+      if (message && message.type === 'chatClassroomsLoaded') {
+        console.log('[ChatView] ✓ Received chatClassroomsLoaded');
+        if (Array.isArray(message.classes)) {
           setClassrooms(message.classes);
           setLoading(false);
         }
+      } else if (message && message.type === 'recentPrivateChatsLoaded') {
+        console.log('[ChatView] ✓ Received recentPrivateChatsLoaded');
+        setRecentPrivateChats(message.chats || []);
+      } else if (message && message.type === 'chatMembersSearchResult') {
+        console.log('[ChatView] ✓ Received chatMembersSearchResult');
+        setSearchResults(message.results || []);
+        setIsSearching(false);
       } else if (message && message.type === 'refreshChatView') {
         refreshData();
       } else if (message && message.type === 'newMessage') {
@@ -66,82 +68,30 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, token, onOpenC
     };
   }, []);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([loadClassrooms(), loadRecentPrivateChats()]);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
+  const loadData = () => {
+    setLoading(true);
+    loadClassrooms();
+    loadRecentPrivateChats();
   };
 
-  const refreshData = async () => {
-    await Promise.all([loadClassrooms(), loadRecentPrivateChats()]);
+  const refreshData = () => {
+    loadClassrooms();
+    loadRecentPrivateChats();
   };
 
-  const loadClassrooms = async () => {
-    try {
-      console.log('[ChatView] Loading classrooms with messages');
-      
-      // Use new API endpoint that includes last message
-      const endpoint = '/api/class/chat/classes-with-messages';
-      const response = await axios.get(`http://localhost:8080${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('[ChatView] API response with messages:', response.data);
-      let classes = response.data || [];
-      
-      // Sort by lastMessageTime (newest first), classes without messages at the end
-      classes.sort((a: any, b: any) => {
-        if (!a.lastMessageTime && !b.lastMessageTime) return 0;
-        if (!a.lastMessageTime) return 1;
-        if (!b.lastMessageTime) return -1;
-        return new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime();
-      });
-      
-      setClassrooms(classes);
-      setLoading(false);
-    } catch (error) {
-      console.error('[ChatView] Error loading classrooms:', error);
-      setLoading(false);
-    }
+  const loadClassrooms = () => {
+    console.log('[ChatView] Requesting classrooms with messages via postMessage');
+    vscode.postMessage({ type: 'getChatClassrooms' });
   };
 
-  const loadRecentPrivateChats = async () => {
-    try {
-      const response = await axios.get('http://localhost:8080/api/messages/recent-chats', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      console.log('[ChatView] Recent private chats RAW:', response.data);
-      
-      // Debug: log each chat's lastMessageTime
-      response.data?.forEach((chat: any) => {
-        console.log(`[ChatView] Chat with ${chat.userName}: lastMessage="${chat.lastMessage}", time=${chat.lastMessageTime}`);
-      });
-      
-      setRecentPrivateChats(response.data || []);
-    } catch (error) {
-      console.error('Error loading recent chats:', error);
-      setRecentPrivateChats([]);
-    }
+  const loadRecentPrivateChats = () => {
+    console.log('[ChatView] Requesting recent private chats via postMessage');
+    vscode.postMessage({ type: 'getRecentPrivateChats' });
   };
 
-  const searchMembers = async (query: string = '') => {
-    try {
-      setIsSearching(true);
-      const endpoint = query.trim() 
-        ? `/api/class/chat/search-members?query=${encodeURIComponent(query)}`
-        : '/api/class/chat/search-members';
-      const response = await axios.get(`http://localhost:8080${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setSearchResults(response.data || []);
-    } catch (error) {
-      console.error('Error searching members:', error);
-      setSearchResults([]);
-    }
+  const searchMembers = (query: string = '') => {
+    setIsSearching(true);
+    vscode.postMessage({ type: 'searchChatMembers', query });
   };
 
   const handleOpenGroupChat = (classroom: Classroom) => {
@@ -218,7 +168,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, token, onOpenC
           </svg>
           <input
             type="text"
-            className="w-full bg-[#f7f7f7] border-none rounded-lg py-2.5 pl-10 pr-4 text-xs focus:ring-1 focus:ring-[#111318] placeholder-[#9ca3af] transition-all outline-none"
+            className="w-full bg-[#f7f7f7] border-none rounded-lg py-2.5 pl-10 pr-4 text-xs focus:ring-1 focus:ring-[#135bec] placeholder-[#9ca3af] transition-all outline-none"
             placeholder="Search conversations..."
             value={searchQuery}
             onFocus={() => {

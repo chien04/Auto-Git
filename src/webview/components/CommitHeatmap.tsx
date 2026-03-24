@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 
 interface CommitHeatmapProps {
     apiService: any;
+    vscode: any;
 }
 
 interface DayData {
@@ -9,33 +10,40 @@ interface DayData {
     count: number;
 }
 
-export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService }) => {
+export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService, vscode }) => {
     const [data, setData] = useState<DayData[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadActivity();
+
+        // Listen for messages from extension
+        const handleMessage = (event: MessageEvent) => {
+            const message = event.data;
+            if (message.type === 'studentActivityLoaded') {
+                const activity = message.activity;
+                // Convert map to array
+                const dailyData: DayData[] = Object.entries(activity.dailyCommits || {})
+                    .map(([date, count]) => ({ 
+                        date, 
+                        count: (count as number) > 0 ? 1 : 0
+                    }))
+                    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                setData(dailyData);
+                setLoading(false);
+            } else if (message.type === 'studentActivityError') {
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    const loadActivity = async () => {
-        try {
-            const activity = await apiService.getStudentActivity();
-            
-            // Convert map to array
-            // Each date with commits counts as 1 submission, regardless of commit count
-            const dailyData: DayData[] = Object.entries(activity.dailyCommits || {})
-                .map(([date, count]) => ({ 
-                    date, 
-                    count: (count as number) > 0 ? 1 : 0  // Convert to submission count (0 or 1)
-                }))
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            setData(dailyData);
-        } catch (error) {
-            console.error('Failed to load submission activity:', error);
-        } finally {
-            setLoading(false);
-        }
+    const loadActivity = () => {
+        setLoading(true);
+        vscode.postMessage({ type: 'getStudentActivity' });
     };
 
     const getColorForCount = (count: number): string => {

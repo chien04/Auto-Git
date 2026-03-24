@@ -72,7 +72,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode, user, onClose }) => {
         </header>
 
         {/* Centered Form Content */}
-        <main className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+        <main className="flex flex-1 flex-col items-center justify-center px-6 pt-4 pb-10">
           <div className="w-full max-w-[420px] flex flex-col gap-8">
             {/* Headline */}
             <div className="text-center">

@@ -152,9 +152,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Teacher: Create a new class (no repository)
-     */
     async createClass(className: string): Promise<CreateClassResponse> {
         try {
             const response = await this.api.post('/class/create', { className });
@@ -164,9 +161,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Student: Join a class using class code
-     */
     async joinClass(studentName: string, classCode: string): Promise<JoinClassResponse> {
         try {
             const response = await this.api.post('/class/join', {
@@ -179,9 +173,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Teacher: Create a new assignment in a class
-     */
     async createAssignment(classCode: string, title: string, description: string, deadline?: string): Promise<CreateAssignmentResponse> {
         try {
             const response = await this.api.post('/assignment/create', {
@@ -197,8 +188,21 @@ export class ApiService {
     }
 
     /**
-     * Student: Join an assignment
+     * Teacher: Upload test cases ZIP file
      */
+    async uploadTestCasesZip(assignmentCode: string, fileName: string, fileContent: string): Promise<any> {
+        try {
+            const response = await this.api.post('/test-cases/upload-zip', {
+                assignmentCode,
+                fileName,
+                fileContent // base64 encoded
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to upload test cases ZIP: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
     async joinAssignment(assignmentCode: string, localPath: string): Promise<JoinAssignmentResponse> {
         try {
             const response = await this.api.post('/assignment/join', {
@@ -252,9 +256,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Get students in an assignment
-     */
     async getAssignmentStudents(assignmentCode: string): Promise<any[]> {
         try {
             const response = await this.api.get(`/assignment/${assignmentCode}/students`);
@@ -298,22 +299,7 @@ export class ApiService {
             throw new Error(`Failed to get student branches: ${error.response?.data?.message || error.message}`);
         }
     }
-
-    /**
-     * Verify token validity
-     */
-    async verifyToken(): Promise<boolean> {
-        try {
-            await this.api.get('/auth/verify');
-            return true;
-        } catch (error) {
-            return false;
-        }
-    }
     
-    /**
-     * Request OTP for email login
-     */
     async requestOTP(email: string): Promise<{success: boolean, message: string}> {
         try {
             const response = await this.api.post('/auth/otp/request', { email });
@@ -323,9 +309,6 @@ export class ApiService {
         }
     }
     
-    /**
-     * Verify OTP and get login token
-     */
     async verifyOTP(email: string, otp: string, role: string): Promise<LoginResponse> {
         try {
             const response = await this.api.post('/auth/otp/verify', { email, otp, role });
@@ -500,9 +483,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Sync assignment workspace (Teacher only)
-     */
     async syncAssignmentWorkspace(assignmentCode: string): Promise<{ message: string }> {
         try {
             console.log('[API] Syncing assignment workspace:', assignmentCode);
@@ -541,9 +521,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Get teacher's local path for assignment
-     */
     async getTeacherLocalPath(assignmentCode: string): Promise<{ localPath: string, exists: boolean }> {
         try {
             const response = await this.api.get(`/assignment/${assignmentCode}/teacher/localPath`);
@@ -568,16 +545,16 @@ export class ApiService {
     }
 
     /**
-     * Check if deadline has passed for a class (Student)
+     * Check if deadline has passed for an assignment (Student)
      */
-    async checkDeadline(classCode: string): Promise<{
+    async checkDeadline(assignmentCode: string): Promise<{
         hasDeadline: boolean;
         deadline?: string;
         canPush: boolean;
         message: string;
     }> {
         try {
-            const response = await this.api.get(`/class/${classCode}/deadline/check`);
+            const response = await this.api.get(`/assignment/${assignmentCode}/deadline/check`);
             return response.data;
         } catch (error: any) {
             console.error('[API] Check deadline error:', error);
@@ -588,12 +565,12 @@ export class ApiService {
     /**
      * Update commit count for student after push
      */
-    async updateCommitCount(classCode: string): Promise<{ commitCount: number; message: string }> {
+    async updateCommitCount(assignmentCode: string): Promise<{ commitCount: number; message: string }> {
         try {
-            console.log('[API] Calling updateCommitCount for class:', classCode);
+            console.log('[API] Calling updateCommitCount for assignment:', assignmentCode);
             console.log('[API] JWT Token exists:', !!this.jwtToken);
             
-            const response = await this.api.post(`/class/${classCode}/student/update-commits`);
+            const response = await this.api.post(`/assignment/${assignmentCode}/update-commits`);
             
             console.log('[API] Update commit count SUCCESS:', response.data);
             return response.data;
@@ -649,6 +626,40 @@ export class ApiService {
             console.error('[API] Get assignment submissions ERROR:', error);
             throw new Error(`Failed to get submissions: ${error.response?.data?.error || error.message}`);
         }
+    }
+
+    // ===================== CHAT API =====================
+
+    async getClassesWithMessages(): Promise<any[]> {
+        const response = await this.api.get('/class/chat/classes-with-messages');
+        return response.data || [];
+    }
+
+    async getRecentPrivateChats(): Promise<any[]> {
+        const response = await this.api.get('/messages/recent-chats');
+        return response.data || [];
+    }
+
+    async searchChatMembers(query?: string): Promise<any[]> {
+        const url = query?.trim()
+            ? `/class/chat/search-members?query=${encodeURIComponent(query)}`
+            : '/class/chat/search-members';
+        const response = await this.api.get(url);
+        return response.data || [];
+    }
+
+    async getPrivateMessages(otherUserId: number): Promise<any[]> {
+        const response = await this.api.get(`/messages/private/${otherUserId}`);
+        return response.data || [];
+    }
+
+    async getClassMessages(classroomId: number): Promise<any[]> {
+        const response = await this.api.get(`/messages/class/${classroomId}`);
+        return response.data || [];
+    }
+
+    async markMessageAsRead(messageId: number): Promise<void> {
+        await this.api.post(`/messages/${messageId}/read`, {});
     }
 }
 

@@ -255,7 +255,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                       setSelectedClass(classItem);
                       setViewAssignments(true);
                     }}
-                    className="group relative flex items-center justify-between p-4 bg-white border border-[#dbdfe6] rounded-xl hover:border-[#111318] transition-colors cursor-pointer"
+                    className="group relative flex items-center justify-between p-4 bg-white border border-[#dbdfe6] rounded-xl hover:border-[#135bec] transition-colors cursor-pointer"
                   >
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-bold text-[#616f89] uppercase tracking-widest">
@@ -290,7 +290,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
           {/* Activity Section */}
           {classes.length > 0 && (
             <section className="px-6">
-              <CommitHeatmap apiService={apiService} />
+              <CommitHeatmap apiService={apiService} vscode={vscode} />
             </section>
           )}
         </main>

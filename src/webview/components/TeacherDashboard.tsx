@@ -317,7 +317,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
         <ChatView
           vscode={vscode}
           currentUser={user}
-          token={''}
           onOpenChat={handleOpenChat}
           onChatClosed={() => setChatOpen(false)}
         />

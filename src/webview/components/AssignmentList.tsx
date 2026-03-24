@@ -50,14 +50,24 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
     // Request current workspace info when component mounts
     vscode.postMessage({ type: 'getCurrentWorkspace' });
 
-    // Listen for assignment join success to reload and workspace changes
+    // Listen for messages from extension
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       if (message.type === 'assignmentJoinedSuccess') {
         loadAssignments();
       } else if (message.type === 'currentWorkspaceInfo') {
-        // Update active assignment in real-time
         setActiveAssignmentCode(message.assignmentCode);
+      } else if (message.type === 'assignmentsLoaded') {
+        setAssignments(message.assignments);
+        setLoading(false);
+      } else if (message.type === 'assignmentsError') {
+        setLoading(false);
+      } else if (message.type === 'assignmentDeleted') {
+        loadAssignments();
+      } else if (message.type === 'setupWorkspaceSuccess') {
+        if (message.data && message.data.workspacePath) {
+          vscode.postMessage({ type: 'openFolder', path: message.data.workspacePath });
+        }
       }
     };
 
@@ -65,15 +75,12 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
     return () => window.removeEventListener('message', handleMessage);
   }, [classCode]);
 
-  const loadAssignments = async () => {
-    try {
-      setLoading(true);
-      const data = await apiService.getAssignments(classCode);
-      setAssignments(data);
-    } catch (error: any) {
-    } finally {
-      setLoading(false);
-    }
+  const loadAssignments = () => {
+    setLoading(true);
+    vscode.postMessage({ 
+      type: 'getAssignments', 
+      classCode: classCode 
+    });
   };
 
   const handleJoinAssignment = (assignment: Assignment) => {
@@ -107,7 +114,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
     });
   };
 
-  const handleSyncWorkspace = async (assignment: Assignment, event: React.MouseEvent) => {
+  const handleSyncWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
     event.stopPropagation();
     
     // Check if this is the currently opened workspace
@@ -116,40 +123,29 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
       return;
     }
     
-    try {
-      await apiService.syncAssignmentWorkspace(assignment.assignmentCode);
-      alert('✅ Đã đồng bộ code mới nhất từ tất cả sinh viên!');
-    } catch (error: any) {
-      alert(`❌ Lỗi đồng bộ: ${error.message}`);
-    }
+    vscode.postMessage({ 
+      type: 'syncAssignmentWorkspace', 
+      assignmentCode: assignment.assignmentCode 
+    });
   };
 
-  const handleSetupWorkspace = async (assignment: Assignment, event: React.MouseEvent) => {
+  const handleSetupWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
     event.stopPropagation();
-    if (confirm(`Setup workspace cho bài tập "${assignment.title}"?\n\nSẽ tạo worktrees cho tất cả sinh viên đã join.`)) {
-      try {
-        const result = await apiService.setupAssignmentWorkspace(assignment.assignmentCode);
-        alert(`✅ ${result.message}\n\nĐường dẫn: ${result.workspacePath}`);
-        // Mở workspace
-        vscode.postMessage({ 
-          type: 'openFolder', 
-          path: result.workspacePath 
-        });
-      } catch (error: any) {
-        alert(`❌ Lỗi setup: ${error.message}`);
-      }
-    }
+    // Send message to provider which will show VS Code confirmation dialog
+    vscode.postMessage({ 
+      type: 'setupAssignmentWorkspace', 
+      assignmentCode: assignment.assignmentCode,
+      title: assignment.title
+    });
   };
 
-  const handleDeleteAssignment = async (assignment: Assignment) => {
-    if (confirm(`Bạn có chắc muốn xóa bài tập "${assignment.title}"?`)) {
-      try {
-        await apiService.deleteAssignment(assignment.assignmentCode);
-        loadAssignments();
-      } catch (error) {
-        alert('Lỗi khi xóa bài tập');
-      }
-    }
+  const handleDeleteAssignment = (assignment: Assignment) => {
+    // Send message to provider which will show VS Code confirmation dialog
+    vscode.postMessage({ 
+      type: 'deleteAssignment', 
+      assignmentCode: assignment.assignmentCode,
+      title: assignment.title
+    });
   };
 
   const formatDeadline = (deadline: string) => {
@@ -211,7 +207,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
               className={`group relative border rounded-xl p-4 transition-all cursor-pointer ${
                 isCurrentAssignment
                   ? 'border-[#135bec] bg-[#135bec]/5'
-                  : 'border-[#dbdfe6] hover:border-[#111318]'
+                  : 'border-[#dbdfe6] hover:border-[#135bec]'
               }`}
               onClick={() => {
                 if (isTeacher) {

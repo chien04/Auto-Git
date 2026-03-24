@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 interface TeacherStatsCardProps {
+    vscode: any;
     apiService: any;
 }
 
@@ -16,23 +17,31 @@ interface ClassStats {
     isActive: boolean;
 }
 
-export const TeacherStatsCard: React.FC<TeacherStatsCardProps> = ({ apiService }) => {
+export const TeacherStatsCard: React.FC<TeacherStatsCardProps> = ({ vscode, apiService }) => {
     const [classes, setClasses] = useState<ClassStats[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadStats();
+
+        // Listen for messages from extension
+        const handleMessage = (event: MessageEvent) => {
+            const message = event.data;
+            if (message.type === 'teacherStatsLoaded') {
+                setClasses(message.stats);
+                setLoading(false);
+            } else if (message.type === 'teacherStatsError') {
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
     }, []);
 
-    const loadStats = async () => {
-        try {
-            const classStats = await apiService.getTeacherClassStatistics();
-            setClasses(classStats);
-        } catch (error) {
-            console.error('Failed to load teacher stats:', error);
-        } finally {
-            setLoading(false);
-        }
+    const loadStats = () => {
+        setLoading(true);
+        vscode.postMessage({ type: 'getTeacherClassStatistics' });
     };
 
     if (loading) {

@@ -91,8 +91,9 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     
     return () => {
       window.removeEventListener('message', handleMessage);
-      // Cleanup WebSocket on unmount
-      wsService.disconnect();
+      // Don't disconnect WebSocket here - it's a singleton service
+      // that should persist across component re-renders.
+      // WebSocket will only disconnect on explicit logout.
     };
   }, []);
 
@@ -189,7 +190,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           <ChatView
             vscode={vscode}
             currentUser={user}
-            token={apiService.getToken() || ''}
             onOpenChat={handleOpenChat}
             onChatClosed={handleCloseChat}
             key={shouldRefreshChat ? 'refresh' : 'normal'}
@@ -205,6 +205,7 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
       {chatOpen && chatConfig && user && (
         <div style={styles.chatOverlay}>
           <ChatWindow
+            vscode={vscode}
             currentUserId={parseInt(user.userId)}
             currentUserName={user.name}
             otherUserId={chatConfig.otherUserId}
@@ -212,7 +213,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
             classroomId={chatConfig.classroomId}
             classroomName={chatConfig.classroomName}
             chatType={chatConfig.chatType}
-            token={apiService.getToken() || ''}
             onClose={handleCloseChat}
           />
         </div>

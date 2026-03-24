@@ -185,8 +185,8 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 				
 				// Get current branch from git
 				const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
-				const branch = currentBranch.trim();
-				console.log('Current git branch:', branch);
+				const currentGitBranch = currentBranch.trim();
+				console.log('Current git branch:', currentGitBranch);
 				
 				// Get remote URL
 				const remotes = await git.getRemotes(true);
@@ -196,45 +196,48 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 					const repoUrl = originRemote.refs.fetch.replace(/\.git$/, '').replace(/^.*@github\.com[:\/]/, 'https://github.com/');
 					console.log('Repository URL:', repoUrl);
 					
-					// Determine role from branch name
-					let role = 'student';
-					let assignmentCode = '';
-					
-					if (branch === 'main' || branch === 'master' || branch === 'teacher') {
-						role = 'teacher';
-					} else if (branch.startsWith('student/')) {
-						role = 'student';
-					}
-					
-					// Get assignment code from folder name
-					// Format: {assignmentCode}-{branch} or {classCode}-{assignmentCode} (teacher)
+					// Get assignment code from folder name first
+					// Format: {assignmentCode}-{studentName} or {classCode}-{assignmentCode} (teacher)
 					const folderParts = folderName.split('-');
+					let assignmentCode = '';
+					let role = 'student';
+					
 					if (folderParts.length > 0) {
 						assignmentCode = folderParts[0]; // First part is assignment code
 					}
 					
-					// For teacher, if it's classCode-assignmentCode format, get the second part
-					if (role === 'teacher' && folderParts.length >= 2) {
-						assignmentCode = folderParts[1]; // Second part is assignment code
-					}
-					
-					console.log('Detected assignment code:', assignmentCode, 'role:', role, 'branch:', branch);
-					
-					// Try to get saved token from globalState
+					// Try to get saved info from globalState FIRST (PRIORITY)
 					// For assignment: student_assignment_{assignmentCode} or assignment_{assignmentCode}
 					let savedInfo = null;
 					let savedToken = null;
+					let branch = currentGitBranch; // Default to current git branch
 					
-					if (role === 'student' && assignmentCode) {
-						const key = `student_assignment_${assignmentCode}`;
-						savedInfo = context.globalState.get<any>(key);
-						console.log(`[DEBUG] Looking for student token with key: ${key}`);
-						console.log('[DEBUG] Found savedInfo:', savedInfo ? 'YES' : 'NO');
-					} else if (role === 'teacher' && assignmentCode) {
-						const key = `assignment_${assignmentCode}`;
-						savedInfo = context.globalState.get<any>(key);
-						console.log(`[DEBUG] Looking for teacher token with key: ${key}`);
-						console.log('[DEBUG] Found savedInfo:', savedInfo ? 'YES' : 'NO');
+					// Try student key first
+					if (assignmentCode) {
+						const studentKey = `student_assignment_${assignmentCode}`;
+						savedInfo = context.globalState.get<any>(studentKey);
+						console.log(`[DEBUG] Looking for student token with key: ${studentKey}`);
+						console.log('[DEBUG] Found student savedInfo:', savedInfo ? 'YES' : 'NO');
+						
+						if (savedInfo && savedInfo.branch) {
+							// ✅ Found student info - use saved branch!
+							branch = savedInfo.branch;
+							role = 'student';
+							console.log(`✅ [STUDENT] Using saved branch from globalState: ${branch}`);
+						} else {
+							// Try teacher key
+							const teacherKey = `assignment_${assignmentCode}`;
+							savedInfo = context.globalState.get<any>(teacherKey);
+							console.log(`[DEBUG] Looking for teacher token with key: ${teacherKey}`);
+							console.log('[DEBUG] Found teacher savedInfo:', savedInfo ? 'YES' : 'NO');
+							
+							if (savedInfo && savedInfo.branch) {
+								// ✅ Found teacher info - use saved branch!
+								branch = savedInfo.branch;
+								role = 'teacher';
+								console.log(`✅ [TEACHER] Using saved branch from globalState: ${branch}`);
+							}
+						}
 					}
 					
 					// Fallback to current_class for old format
@@ -242,13 +245,71 @@ async function restoreGitServiceState(context: vscode.ExtensionContext) {
 						console.log('[DEBUG] savedInfo not found, trying current_class fallback');
 						savedInfo = context.globalState.get<any>('current_class');
 						console.log('[DEBUG] Fallback current_class:', savedInfo ? 'YES' : 'NO');
+						
+						if (savedInfo && savedInfo.branch) {
+							branch = savedInfo.branch;
+							if (savedInfo.role) {
+								role = savedInfo.role;
+							}
+							console.log(`✅ [FALLBACK] Using saved branch from current_class: ${branch}`);
+						}
 					}
+					
+					// If still no saved info, determine role from current git branch
+					if (!savedInfo || !savedInfo.branch) {
+						console.log('⚠️ No saved branch info, using current git branch:', currentGitBranch);
+						branch = currentGitBranch;
+						
+						if (branch === 'main' || branch === 'master' || branch === 'teacher') {
+							role = 'teacher';
+						} else if (branch.startsWith('student/')) {
+							role = 'student';
+						}
+					}
+					
+					console.log('🎯 Final detected: assignmentCode:', assignmentCode, 'role:', role, 'branch:', branch);
 					
 					savedToken = savedInfo?.token || token;
 					console.log('[DEBUG] Final token for git service:', savedToken ? 'EXISTS (length: ' + savedToken.length + ')' : 'NULL');
 					
 					if (savedToken) {
 						console.log('[DEBUG] Initializing git service with token...');
+						
+						// ✅ IMPORTANT: Checkout to correct branch if different from current
+						if (branch !== currentGitBranch) {
+							console.log(`⚠️ Branch mismatch! Git: ${currentGitBranch}, Saved: ${branch}`);
+							console.log(`🔄 Checking out to correct branch: ${branch}`);
+							
+							try {
+								// Check if branch exists locally
+								const localBranches = await git.branchLocal();
+								const branchExists = localBranches.all.includes(branch);
+								
+								if (branchExists) {
+									await git.checkout(branch);
+									console.log(`✅ Checked out to existing local branch: ${branch}`);
+								} else {
+									// Check if remote branch exists
+									await git.fetch(['origin']);
+									const remoteBranches = await git.branch(['-r']);
+									const remoteBranchExists = remoteBranches.all.includes(`origin/${branch}`);
+									
+									if (remoteBranchExists) {
+										await git.checkout(branch);
+										console.log(`✅ Checked out to remote branch: ${branch}`);
+									} else {
+										console.error(`❌ Branch ${branch} not found locally or remotely!`);
+										vscode.window.showErrorMessage(`Không tìm thấy branch: ${branch}`);
+									}
+								}
+							} catch (checkoutError) {
+								console.error('Failed to checkout branch:', checkoutError);
+								vscode.window.showErrorMessage(`Lỗi chuyển branch: ${checkoutError}`);
+							}
+						} else {
+							console.log(`✅ Already on correct branch: ${branch}`);
+						}
+						
 						// Update globalState with current workspace info
 						const currentInfo = {
 							assignmentCode: assignmentCode,

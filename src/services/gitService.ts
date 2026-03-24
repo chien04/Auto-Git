@@ -23,9 +23,6 @@ export class GitService {
 
     constructor() {}
 
-    /**
-     * Clone repository with authentication token
-     */
     async cloneRepository(options: CloneOptions): Promise<void> {
         try {
             // Ensure local path exists
@@ -33,8 +30,6 @@ export class GitService {
                 fs.mkdirSync(options.localPath, { recursive: true });
             }
 
-            // Build authenticated URL
-            // Format: https://x-access-token:TOKEN@github.com/owner/repo.git
             const authenticatedUrl = this.buildAuthenticatedUrl(options.repoUrl, options.token);
 
             const gitOptions: Partial<SimpleGitOptions> = {
@@ -123,8 +118,9 @@ export class GitService {
                 const authenticatedUrl = this.buildAuthenticatedUrl(this.repoUrl, this.token);
                 await this.git.remote(['set-url', 'origin', authenticatedUrl]);
                 console.log('Remote URL updated with authentication token');
-            } catch (error) {
-                console.error('Failed to set remote URL:', error);
+            } catch (error: any) {
+                console.warn('Failed to set remote URL (permission denied, will use explicit URL for push):', error.message);
+                // Don't throw - we can still push with explicit URL
             }
         }
 
@@ -224,8 +220,6 @@ export class GitService {
         // Remove .git suffix if present
         const cleanUrl = repoUrl.replace(/\.git$/, '');
         
-        // Extract parts from GitHub URL
-        // Example: https://github.com/owner/repo
         const match = cleanUrl.match(/https:\/\/github\.com\/(.+)/);
         
         if (!match) {
@@ -237,13 +231,12 @@ export class GitService {
     }
 
     /**
-     * Set API service and class code for deadline check
+     * Set API service and assignment code for deadline check
      */
-    setClassInfo(apiService: any, classCode: string): void {
+    setClassInfo(apiService: any, assignmentCode: string, classCode?: string): void {
         this.apiService = apiService;
-        this.classCode = classCode;
-        // For assignment-based architecture, classCode is actually assignmentCode
-        this.assignmentCode = classCode;
+        this.assignmentCode = assignmentCode;
+        this.classCode = classCode || assignmentCode; // fallback to assignmentCode if classCode not provided
     }
 
     /**
@@ -277,9 +270,9 @@ export class GitService {
 
         try {
             // Check deadline before allowing push (Student only)
-            if (this.apiService && this.classCode) {
+            if (this.apiService && this.assignmentCode) {
                 try {
-                    const deadlineCheck = await this.apiService.checkDeadline(this.classCode);
+                    const deadlineCheck = await this.apiService.checkDeadline(this.assignmentCode);
                     if (!deadlineCheck.canPush) {
                         const deadlineStr = deadlineCheck.deadline 
                             ? new Date(deadlineCheck.deadline).toLocaleString('vi-VN')
@@ -339,14 +332,29 @@ export class GitService {
                 const authenticatedUrl = this.buildAuthenticatedUrl(this.repoUrl, this.token);
                 console.log('[DEBUG] Authenticated URL:', authenticatedUrl.replace(this.token, '***TOKEN***'));
                 
-                // Set remote URL with token
-                await this.git.remote(['set-url', 'origin', authenticatedUrl]);
-                console.log('[DEBUG] Remote URL updated');
+                // Try to set remote URL with token (might fail due to permission on Windows)
+                let remoteUrlSet = false;
+                try {
+                    await this.git.remote(['set-url', 'origin', authenticatedUrl]);
+                    console.log('[DEBUG] Remote URL updated successfully');
+                    remoteUrlSet = true;
+                } catch (remoteError: any) {
+                    console.warn('[DEBUG] Could not set remote URL (permission denied), will push with explicit URL:', remoteError.message);
+                    remoteUrlSet = false;
+                }
                 
                 try {
                     // Try to push
-                    console.log('[DEBUG] Attempting push to origin/' + this.branch);
-                    await this.git.push('origin', this.branch);
+                    console.log('[DEBUG] Attempting push to ' + (remoteUrlSet ? 'origin/' : '') + this.branch);
+                    
+                    if (remoteUrlSet) {
+                        // Remote URL was set, use normal push
+                        await this.git.push('origin', this.branch);
+                    } else {
+                        // Remote URL couldn't be set, use explicit authenticated URL
+                        await this.git.push(authenticatedUrl, this.branch);
+                    }
+                    
                     console.log(`✅ Auto-pushed changes to ${this.branch}`);
                     
                     // Update commit count in backend after successful push
@@ -367,11 +375,19 @@ export class GitService {
                         
                         try {
                             // Pull with rebase to avoid merge commits
-                            await this.git.pull('origin', this.branch, {'--rebase': 'true'});
+                            if (remoteUrlSet) {
+                                await this.git.pull('origin', this.branch, {'--rebase': 'true'});
+                            } else {
+                                await this.git.pull(authenticatedUrl, this.branch, {'--rebase': 'true'});
+                            }
                             console.log('Pulled remote changes successfully');
                             
                             // Retry push
-                            await this.git.push('origin', this.branch);
+                            if (remoteUrlSet) {
+                                await this.git.push('origin', this.branch);
+                            } else {
+                                await this.git.push(authenticatedUrl, this.branch);
+                            }
                             console.log(`Auto-pushed changes to ${this.branch} after pull`);
                             
                             // Update commit count in backend after successful push

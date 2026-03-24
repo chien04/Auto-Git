@@ -143,10 +143,40 @@ export class WebSocketService {
    * Disconnect from WebSocket server
    */
   disconnect(): void {
-    if (this.client) {
-      this.subscriptions.forEach((sub) => sub.unsubscribe());
+    try {
+      console.log('[WebSocket] 🔌 Disconnecting...');
+      
+      // Unsubscribe from all subscriptions
+      this.subscriptions.forEach((sub) => {
+        try {
+          sub.unsubscribe();
+        } catch (error) {
+          console.warn('[WebSocket] Error unsubscribing:', error);
+        }
+      });
       this.subscriptions.clear();
-      this.client.deactivate();
+      
+      // Clear global listeners
+      this.globalMessageListeners.clear();
+      
+      // Deactivate client
+      if (this.client) {
+        try {
+          this.client.deactivate();
+        } catch (error) {
+          console.warn('[WebSocket] Error deactivating client:', error);
+        }
+        this.client = null;
+      }
+      
+      this.connected = false;
+      console.log('[WebSocket] ✅ Disconnected successfully');
+    } catch (error) {
+      console.error('[WebSocket] ❌ Error during disconnect:', error);
+      // Force cleanup even if errors occur
+      this.subscriptions.clear();
+      this.globalMessageListeners.clear();
+      this.client = null;
       this.connected = false;
     }
   }

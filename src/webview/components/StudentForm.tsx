@@ -81,7 +81,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
               <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Tên sinh viên</span>
               <input 
                 type="text"
-                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#111318]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
+                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
                 placeholder="Ví dụ: Nguyễn Văn A"
                 value={studentName}
                 onChange={(e) => setStudentName(e.target.value)}
@@ -95,7 +95,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
               <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Mã lớp học</span>
               <input 
                 type="text"
-                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#111318]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
+                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
                 placeholder="Ví dụ: AB12-CD34"
                 value={classCode}
                 onChange={(e) => setClassCode(e.target.value.toUpperCase())}
@@ -118,7 +118,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
         <div className="mt-10 flex flex-col gap-4">
           <button 
             onClick={handleJoinClass}
-            className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 bg-[#111318] text-white gap-2 text-base font-bold leading-normal tracking-wide hover:bg-[#2c2c2c] transition-colors"
+            className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 bg-[#135bec] text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity"
           >
             <span>Tham gia lớp học</span>
           </button>

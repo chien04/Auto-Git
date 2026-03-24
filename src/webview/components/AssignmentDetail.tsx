@@ -30,22 +30,28 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     loadSubmissions();
     // Scroll to top when viewing assignment detail
     window.scrollTo(0, 0);
+
+    // Listen for messages from extension
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (message.type === 'submissionsLoaded') {
+        setSubmissions(message.submissions);
+        setLoading(false);
+      } else if (message.type === 'submissionsError') {
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
   }, [assignment.assignmentCode]);
 
-  const loadSubmissions = async () => {
-    try {
-      setLoading(true);
-      // Both teacher and student: Load all students' submissions
-      const data = await apiService.getAssignmentSubmissions(assignment.assignmentCode);
-      setSubmissions(data);
-    } catch (error) {
-      vscode.postMessage({ 
-        type: 'showError', 
-        message: 'Không thể tải danh sách nộp bài' 
-      });
-    } finally {
-      setLoading(false);
-    }
+  const loadSubmissions = () => {
+    setLoading(true);
+    vscode.postMessage({ 
+      type: 'getAssignmentSubmissions', 
+      assignmentCode: assignment.assignmentCode 
+    });
   };
 
   const formatDate = (dateString: string | null) => {
@@ -63,7 +69,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
 
   const handleOpenWorkspace = () => {
     vscode.postMessage({
-      type: 'openTeacherAssignment',
+      type: 'openAssignment',  // ✅ Auto-detect teacher/student
       assignmentCode: assignment.assignmentCode
     });
   };
