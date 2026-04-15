@@ -28,6 +28,14 @@ export interface SendMessageRequest {
   type: MessageType;
 }
 
+export interface RealtimeNotification {
+  type: string;
+  message: string;
+  timestamp?: string;
+  studentId?: number;
+  score?: number;
+}
+
 export class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
@@ -35,6 +43,7 @@ export class WebSocketService {
   private reconnectDelay: number = 5000;
   private baseUrl: string;
   private globalMessageListeners: Set<(message: ChatMessage) => void> = new Set();
+  private globalNotificationListeners: Set<(notification: RealtimeNotification) => void> = new Set();
   
   constructor(baseUrl: string = 'http://localhost:8080') {
     this.baseUrl = baseUrl;
@@ -52,6 +61,16 @@ export class WebSocketService {
       this.globalMessageListeners.delete(listener);
     };
   }
+
+  /**
+   * Add global notification listener (for NotificationView)
+   */
+  addGlobalNotificationListener(listener: (notification: RealtimeNotification) => void): () => void {
+    this.globalNotificationListeners.add(listener);
+    return () => {
+      this.globalNotificationListeners.delete(listener);
+    };
+  }
   
   /**
    * Broadcast message to all global listeners
@@ -66,6 +85,19 @@ export class WebSocketService {
       }
     });
   }
+
+  /**
+   * Broadcast notification to all global listeners
+   */
+  private broadcastNotificationToGlobalListeners(notification: RealtimeNotification): void {
+    this.globalNotificationListeners.forEach(listener => {
+      try {
+        listener(notification);
+      } catch (error) {
+        console.error('[WebSocketService] Error in notification listener:', error);
+      }
+    });
+  }
   
   /**
    * Connect to WebSocket server
@@ -77,7 +109,7 @@ export class WebSocketService {
         console.log(`[WebSocket] 🔗 Token length: ${token?.length}, userId type: ${typeof userId}`);
         
         // Create SockJS socket with JWT token for authentication
-        const socket = new SockJS(`${this.baseUrl}/ws?token=${token}`);
+        const socket = new SockJS(`${this.baseUrl}/ws-notifications?token=${token}`);
         
         socket.onopen = () => {
           console.log('[WebSocket] SockJS connection opened');
@@ -99,7 +131,10 @@ export class WebSocketService {
             userId: userId.toString()
           },
           debug: (str: string) => {
-            console.log('[STOMP]', str);
+            const sanitized = str
+              .replace(/Authorization:Bearer\s+[^\n\r]+/g, 'Authorization:Bearer [REDACTED]')
+              .replace(/token=[^&\s]+/g, 'token=[REDACTED]');
+            console.log('[STOMP]', sanitized);
           },
           reconnectDelay: this.reconnectDelay,
           heartbeatIncoming: 4000,
@@ -158,6 +193,7 @@ export class WebSocketService {
       
       // Clear global listeners
       this.globalMessageListeners.clear();
+      this.globalNotificationListeners.clear();
       
       // Deactivate client
       if (this.client) {
@@ -176,6 +212,7 @@ export class WebSocketService {
       // Force cleanup even if errors occur
       this.subscriptions.clear();
       this.globalMessageListeners.clear();
+      this.globalNotificationListeners.clear();
       this.client = null;
       this.connected = false;
     }
@@ -197,10 +234,10 @@ export class WebSocketService {
       return undefined;
     }
     
-    const destination = `/user/${userId}/queue/private`;
+    const destination = `/user/queue/private`;
     console.log('[WebSocketService] 📥 SUBSCRIBING to:', destination);
     console.log('[WebSocketService] 📥 userId:', userId, '(type:', typeof userId, ')');
-    console.log('[WebSocketService] 📥 Expected backend to send to: /user/' + userId + '/queue/private');
+    console.log('[WebSocketService] 📥 Expected backend to send to: /user/queue/private for current principal');
     
     // Unsubscribe if already subscribed
     if (this.subscriptions.has(destination)) {
@@ -240,6 +277,45 @@ export class WebSocketService {
       }
     };
   }
+
+  /**
+   * Subscribe to user notifications
+   */
+  subscribeToNotifications(userId: number, callback: (notification: RealtimeNotification) => void): (() => void) | undefined {
+    if (!this.client || !this.connected) {
+      console.error('[WebSocketService] ❌ Cannot subscribe notifications - WebSocket not connected');
+      return undefined;
+    }
+
+    const destination = `/user/queue/notifications`;
+    console.log('[WebSocketService] 🔔 SUBSCRIBING notifications to:', destination, 'for userId:', userId);
+
+    if (this.subscriptions.has(destination)) {
+      this.subscriptions.get(destination)?.unsubscribe();
+    }
+
+    const subscription = this.client.subscribe(destination, (message: IMessage) => {
+      console.log('[WebSocketService] 📨 NOTIFICATION message received on', destination);
+      console.log('[WebSocketService] 📨 Notification raw body:', message.body);
+      try {
+        const notification: RealtimeNotification = JSON.parse(message.body);
+        console.log('[WebSocketService] ✅ Parsed notification:', notification);
+        callback(notification);
+        this.broadcastNotificationToGlobalListeners(notification);
+      } catch (error) {
+        console.error('[WebSocketService] ❌ Error parsing notification:', error, message.body);
+      }
+    });
+
+    this.subscriptions.set(destination, subscription);
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+        this.subscriptions.delete(destination);
+      }
+    };
+  }
   
   /**
    * Subscribe to class group messages
@@ -265,6 +341,7 @@ export class WebSocketService {
         const chatMessage: ChatMessage = JSON.parse(message.body);
         console.log('[WebSocketService] ✅ Parsed class message:', chatMessage);
         callback(chatMessage);
+        this.broadcastToGlobalListeners(chatMessage);
       } catch (error) {
         console.error('[WebSocketService] ❌ Error parsing class message:', error);
       }

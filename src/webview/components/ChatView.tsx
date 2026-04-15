@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface ChatViewProps {
   vscode: any;
@@ -24,13 +24,22 @@ interface RecentPrivateChat {
   unreadCount?: number;
 }
 
+interface SearchMember {
+  userId: number;
+  userName: string;
+  role?: string;
+  className?: string;
+}
+
 const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, onChatClosed }) => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [recentPrivateChats, setRecentPrivateChats] = useState<RecentPrivateChat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchMember[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Set up message listener FIRST
@@ -90,12 +99,38 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   };
 
   const searchMembers = (query: string = '') => {
-    setIsSearching(true);
     vscode.postMessage({ type: 'searchChatMembers', query });
   };
 
+  useEffect(() => {
+    const shouldSearch = isSearchFocused || searchQuery.trim().length > 0;
+    if (!shouldSearch) {
+      setIsSearching(false);
+      return;
+    }
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    setIsSearching(true);
+    searchDebounceRef.current = setTimeout(() => {
+      searchMembers(searchQuery.trim());
+    }, 250);
+
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, [searchQuery, isSearchFocused]);
+
+  const openChat = (config: any) => {
+    onOpenChat(config);
+  };
+
   const handleOpenGroupChat = (classroom: Classroom) => {
-    onOpenChat({
+    openChat({
       classroomId: classroom.id,
       classroomName: classroom.className,
       chatType: 'CLASS_GROUP'
@@ -103,11 +138,23 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   };
 
   const handleOpenPrivateChat = (chat: RecentPrivateChat) => {
-    onOpenChat({
+    openChat({
       otherUserId: chat.userId,
       otherUserName: chat.userName,
       chatType: 'PRIVATE'
     });
+  };
+
+  const handleOpenSearchResult = (member: SearchMember) => {
+    openChat({
+      otherUserId: member.userId,
+      otherUserName: member.userName,
+      chatType: 'PRIVATE'
+    });
+    setSearchQuery('');
+    setSearchResults([]);
+    setIsSearching(false);
+    setIsSearchFocused(false);
   };
 
   // Filter chats based on search query
@@ -124,6 +171,8 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         chat.userEmail.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : recentPrivateChats;
+
+  const isSearchMode = isSearchFocused || searchQuery.trim().length > 0;
 
   if (loading) {
     return (
@@ -171,23 +220,16 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
             className="w-full bg-[#f7f7f7] border-none rounded-lg py-2.5 pl-10 pr-4 text-xs focus:ring-1 focus:ring-[#135bec] placeholder-[#9ca3af] transition-all outline-none"
             placeholder="Search conversations..."
             value={searchQuery}
-            onFocus={() => {
-              if (!isSearching && searchResults.length === 0) {
-                searchMembers('');
-              }
-            }}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              searchMembers(e.target.value);
-            }}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
             <button
               className="absolute right-3 text-[#9ca3af] hover:text-[#111318]"
               onClick={() => {
                 setSearchQuery('');
-                setSearchResults([]);
-                setIsSearching(false);
+                setIsSearchFocused(true);
               }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,22 +242,19 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
 
       {/* Chat List */}
       <main className="flex-1 overflow-y-auto bg-white pb-24">
-        {isSearching && searchQuery ? (
-          /* Search Results */
-          searchResults.length > 0 ? (
+        {isSearchMode ? (
+          isSearching ? (
+            <div className="text-center py-12">
+              <p className="text-[#616f89] text-sm">Đang tìm người dùng...</p>
+            </div>
+          ) : searchResults.length > 0 ? (
             searchResults.map((member) => (
               <div
                 key={`search-${member.userId}`}
                 className="flex items-center gap-3 px-4 py-4 hover:bg-[#fafafa] cursor-pointer border-b border-[#f7f7f7]"
-                onClick={() => {
-                  onOpenChat({
-                    otherUserId: member.userId,
-                    otherUserName: member.userName,
-                    chatType: 'PRIVATE'
-                  });
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setIsSearching(false);
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleOpenSearchResult(member);
                 }}
               >
                 <div className="w-12 h-12 rounded-full bg-[#9b59b6] flex items-center justify-center text-white text-xs font-bold shrink-0">
@@ -228,13 +267,15 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
                       {member.role}
                     </span>
                   </div>
-                  <p className="text-[12px] text-[#616f89] truncate">{member.className}</p>
+                  <p className="text-[12px] text-[#616f89] truncate">{member.className || 'Direct message'}</p>
                 </div>
               </div>
             ))
           ) : (
             <div className="text-center py-12">
-              <p className="text-[#616f89] text-sm">Không tìm thấy người dùng</p>
+              <p className="text-[#616f89] text-sm">
+                {searchQuery.trim() ? 'Không tìm thấy người dùng' : 'Nhập tên hoặc email để tìm người dùng'}
+              </p>
             </div>
           )
         ) : (

@@ -48,9 +48,9 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
 
   const loadSubmissions = () => {
     setLoading(true);
-    vscode.postMessage({ 
-      type: 'getAssignmentSubmissions', 
-      assignmentCode: assignment.assignmentCode 
+    vscode.postMessage({
+      type: 'getAssignmentSubmissions',
+      assignmentCode: assignment.assignmentCode
     });
   };
 
@@ -60,6 +60,15 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     const month = date.getMonth() + 1;
     const day = date.getDate();
     return `Tháng ${month}, ${day}`;
+  };
+
+  const handleExportExcel = () => {
+    vscode.postMessage({
+      type: 'exportAssignmentExcel',
+      assignmentId: assignment.assignmentId,
+      assignmentCode: assignment.assignmentCode,
+      title: assignment.title
+    });
   };
 
   const formatScore = (score: number | null) => {
@@ -79,7 +88,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
       <div className="w-full max-w-[420px] bg-white flex flex-col min-h-screen border-x border-gray-200">
         {/* Back Button (no border) */}
         <div className="px-4 py-3">
-          <button 
+          <button
             onClick={onBack}
             className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors text-sm font-medium"
           >
@@ -101,7 +110,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                   {assignment.className}
                 </h1>
               )}
-              <button 
+              <button
                 onClick={handleOpenWorkspace}
                 className="bg-[#135bec] text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-800 transition-colors"
               >
@@ -109,24 +118,24 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                 Workspace
               </button>
             </div>
-            
+
             {/* Class Code */}
             {assignment.classCode && (
               <p className="text-sm text-gray-600 mb-3">
                 Mã lớp: <span className="font-semibold">{assignment.classCode}</span>
               </p>
             )}
-            
+
             {/* Assignment Title */}
             <h2 className="text-lg font-bold text-black mb-2">
               {assignment.title}
             </h2>
-            
+
             {/* Description (without label) */}
             <p className="text-sm text-gray-700 leading-relaxed mb-3">
               {assignment.description || 'Không có mô tả'}
             </p>
-            
+
             {/* Deadline */}
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <span>📅</span>
@@ -141,13 +150,22 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                 Danh sách nộp bài ({submissions.length} sinh viên)
               </h3>
               {isTeacher && (
-                <button 
-                  onClick={loadSubmissions}
-                  className="text-[16px] text-gray-600 hover:text-black"
-                  title="Tải lại danh sách"
-                >
-                  🔄
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportExcel}
+                    className="text-xs px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    title="Xuất file Excel"
+                  >
+                    Xuất Excel
+                  </button>
+                  <button
+                    onClick={loadSubmissions}
+                    className="text-[16px] text-gray-600 hover:text-black"
+                    title="Tải lại danh sách"
+                  >
+                    🔄
+                  </button>
+                </div>
               )}
             </div>
 
@@ -172,7 +190,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                   </div>
                 ) : (
                   submissions.map((submission, index) => (
-                    <div 
+                    <div
                       key={submission.studentId || index}
                       className="flex items-center px-4 py-3 border-b border-gray-200 hover:bg-gray-50 cursor-pointer group"
                     >

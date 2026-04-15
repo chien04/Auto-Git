@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, MessageType, getWebSocketService } from '../services/websocketService';
+import { ImagePlus, Paperclip, Send, ThumbsUp, File } from 'lucide-react';
+
+type AttachmentPayload = {
+  kind: 'image' | 'file';
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+};
 
 interface ChatWindowProps {
   vscode: any;
@@ -11,6 +19,7 @@ interface ChatWindowProps {
   classroomName?: string;
   chatType: MessageType;
   onClose: () => void;
+  fullScreen?: boolean;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -22,16 +31,37 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   classroomId,
   classroomName,
   chatType,
-  onClose
+  onClose,
+  fullScreen = false
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<AttachmentPayload | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const wsService = getWebSocketService();
   const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const ATTACHMENT_PREFIX = '__ATTACHMENT__:';
+
+  const encodeAttachment = (payload: AttachmentPayload): string => {
+    return `${ATTACHMENT_PREFIX}${JSON.stringify(payload)}`;
+  };
+
+  const decodeAttachment = (content: string): AttachmentPayload | null => {
+    if (!content.startsWith(ATTACHMENT_PREFIX)) {
+      return null;
+    }
+    try {
+      return JSON.parse(content.slice(ATTACHMENT_PREFIX.length)) as AttachmentPayload;
+    } catch {
+      return null;
+    }
+  };
 
   // Check WebSocket connection status
   useEffect(() => {
@@ -110,6 +140,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               console.log('[ChatWindow] Updated existing message', message.id);
               return updated;
             }
+
+            // Replace optimistic self message with server echo to avoid duplicates
+            if (isToOther) {
+              const optimisticIndex = prev.findIndex(m =>
+                m.senderId === currentUserId &&
+                m.receiverId === otherUserId &&
+                m.content === message.content &&
+                m.id > Date.now() - 5000
+              );
+
+              if (optimisticIndex !== -1) {
+                const updated = [...prev];
+                updated[optimisticIndex] = message;
+                console.log('[ChatWindow] Replaced optimistic private message', message.id);
+                return updated;
+              }
+            }
+
             console.log('[ChatWindow] Adding new message', message.id);
             return [...prev, message];
           });
@@ -175,6 +223,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     };
   }, [currentUserId, otherUserId, classroomId, chatType, isConnected]);
 
+  // Ensure class-topic subscription exists while a class chat is open
+  useEffect(() => {
+    if (chatType !== MessageType.CLASS_GROUP || !classroomId || !wsService.isConnected()) {
+      return;
+    }
+
+    const unsubscribe = wsService.subscribeToClassMessages(classroomId, () => {
+      // Message processing is centralized via global listener in this component.
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [chatType, classroomId, isConnected]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     scrollToBottom();
@@ -196,7 +261,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const handleSendMessage = () => {
-    if (!newMessage.trim()) {
+    const hasText = newMessage.trim().length > 0;
+    const payloadContent = pendingAttachment ? encodeAttachment(pendingAttachment) : (hasText ? newMessage.trim() : '👍');
+
+    if (!payloadContent) {
       return;
     }
 
@@ -213,7 +281,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         senderName: currentUserName,
         receiverId: otherUserId,
         classroomId: classroomId,
-        content: newMessage.trim(),
+        content: payloadContent,
         messageType: chatType,
         sentAt: new Date().toISOString(),
         isRead: false
@@ -224,12 +292,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       
       // Send via WebSocket
       if (chatType === MessageType.PRIVATE && otherUserId) {
-        wsService.sendPrivateMessage(otherUserId, newMessage);
+        wsService.sendPrivateMessage(otherUserId, payloadContent);
       } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
-        wsService.sendClassMessage(classroomId, newMessage);
+        wsService.sendClassMessage(classroomId, payloadContent);
       }
       
       setNewMessage('');
+      setPendingAttachment(null);
       
       // Reset textarea height
       if (textareaRef.current) {
@@ -256,6 +325,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (pendingAttachment) {
+      setPendingAttachment(null);
+    }
     setNewMessage(e.target.value);
     
     // Auto-resize textarea like Messenger
@@ -268,6 +340,62 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleFilePicked = (file: File | null, kind: 'image' | 'file') => {
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (!dataUrl) {
+        return;
+      }
+      setPendingAttachment({
+        kind,
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        dataUrl
+      });
+      setNewMessage('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const renderMessageContent = (message: ChatMessage) => {
+    const attachment = decodeAttachment(message.content);
+    if (!attachment) {
+      return (
+        <div style={styles.messageContent}>
+          {message.content}
+          {message.senderId === currentUserId && (
+            <span style={styles.readStatus}>{message.isRead ? ' ✓✓' : ' ✓'}</span>
+          )}
+        </div>
+      );
+    }
+
+    if (attachment.kind === 'image') {
+      return (
+        <div style={styles.attachmentWrapper}>
+          <img src={attachment.dataUrl} alt={attachment.name} style={styles.attachmentImage} />
+          <div style={styles.attachmentName}>{attachment.name}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={styles.attachmentWrapper}>
+        <a href={attachment.dataUrl} download={attachment.name} style={styles.fileLink}>
+          <span style={styles.fileLinkInner}>
+            <File size={14} strokeWidth={2.2} />
+            {attachment.name}
+          </span>
+        </a>
+      </div>
+    );
   };
 
   const formatTime = (dateString: string) => {
@@ -301,33 +429,49 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   });
 
   return (
-    <div style={styles.container}>
+    <div
+      style={{
+        ...styles.container,
+        ...(fullScreen ? styles.containerFullScreen : {})
+      }}
+    >
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerInfo}>
-          <div style={styles.avatar}>
-            {chatType === MessageType.PRIVATE 
-              ? (otherUserName ? otherUserName.charAt(0).toUpperCase() : 'U')
-              : '👥'}
-          </div>
+          {fullScreen ? (
+            <button onClick={onClose} style={styles.backButton} title="Quay lại">
+              ←
+            </button>
+          ) : (
+            <div style={styles.avatar}>
+              {chatType === MessageType.PRIVATE
+                ? (otherUserName ? otherUserName.charAt(0).toUpperCase() : 'U')
+                : '👥'}
+            </div>
+          )}
           <div style={styles.headerText}>
             <div style={styles.headerTitle}>
               {chatType === MessageType.PRIVATE ? otherUserName : classroomName}
             </div>
             <div style={styles.headerSubtitle}>
-              {isConnected ? (
-                <span style={{color: '#4ade80'}}>● Đã kết nối</span>
-              ) : (
-                <span style={{color: '#f87171'}}>● Đang kết nối...</span>
-              )}
+              {chatType === MessageType.PRIVATE ? 'Direct Message' : 'Class Group'}
             </div>
           </div>
         </div>
-        <button onClick={onClose} style={styles.closeButton}>✕</button>
+        {fullScreen ? (
+          <button style={styles.moreButton} title="Tùy chọn">⋮</button>
+        ) : (
+          <button onClick={onClose} style={styles.closeButton}>✕</button>
+        )}
       </div>
 
       {/* Messages Area */}
-      <div style={styles.messagesContainer}>
+      <div
+        style={{
+          ...styles.messagesContainer,
+          ...(fullScreen ? styles.messagesContainerFullScreen : {})
+        }}
+      >
         {loading ? (
           <div style={styles.loadingContainer}>
             <div style={styles.loading}>Đang tải tin nhắn...</div>
@@ -365,14 +509,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                           {!isOwnMessage && chatType === MessageType.CLASS_GROUP && (
                             <div style={styles.senderName}>{message.senderName}</div>
                           )}
-                          <div style={styles.messageContent}>
-                            {message.content}
-                            {isOwnMessage && (
-                              <span style={styles.readStatus}>
-                                {message.isRead ? ' ✓✓' : ' ✓'}
-                              </span>
-                            )}
-                          </div>
+                          {renderMessageContent(message)}
                         </div>
                       </div>
                     );
@@ -386,7 +523,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Input Area */}
-      <div style={styles.inputContainer}>
+      <div
+        style={{
+          ...styles.inputContainer,
+          ...(fullScreen ? styles.inputContainerFullScreen : {})
+        }}
+      >
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'image')}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'file')}
+        />
+        <button
+          style={styles.attachButton}
+          onClick={() => imageInputRef.current?.click()}
+          title="Gửi ảnh"
+          disabled={!isConnected}
+        >
+          <ImagePlus size={16} strokeWidth={2.2} />
+        </button>
+        <button
+          style={styles.attachButton}
+          onClick={() => fileInputRef.current?.click()}
+          title="Gửi file"
+          disabled={!isConnected}
+        >
+          <Paperclip size={16} strokeWidth={2.2} />
+        </button>
         <textarea
           ref={textareaRef}
           value={newMessage}
@@ -394,19 +565,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           onKeyPress={handleKeyPress}
           style={styles.input}
           disabled={!isConnected}
-          placeholder="Nhập tin nhắn..."
+          placeholder={pendingAttachment ? `Sẵn sàng gửi: ${pendingAttachment.name}` : 'Nhập tin nhắn...'}
         />
         <button
           onClick={handleSendMessage}
-          disabled={!newMessage.trim() || !isConnected}
+          disabled={!isConnected}
           style={{
             ...styles.sendButton,
-            ...(!newMessage.trim() || !isConnected ? styles.sendButtonDisabled : {})
+            ...(!isConnected ? styles.sendButtonDisabled : {})
           }}
+          title={(newMessage.trim() || pendingAttachment) ? 'Gửi' : 'Thả tim'}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
+          {(newMessage.trim() || pendingAttachment) ? (
+            <Send size={18} strokeWidth={2.5} />
+          ) : (
+            <ThumbsUp size={17} strokeWidth={2.5} />
+          )}
         </button>
       </div>
     </div>
@@ -424,14 +598,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
     overflow: 'hidden'
   },
+  containerFullScreen: {
+    width: '100%',
+    maxWidth: '420px',
+    minHeight: '100vh',
+    height: '100vh',
+    borderRadius: 0,
+    boxShadow: 'none',
+    margin: '0 auto',
+    backgroundColor: '#ffffff'
+  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '12px 16px',
-    backgroundColor: '#0084ff',
-    color: '#ffffff',
-    borderBottom: 'none'
+    padding: '10px 12px',
+    backgroundColor: '#ffffff',
+    color: '#111318',
+    borderBottom: '1px solid #e5e7eb'
   },
   headerInfo: {
     display: 'flex',
@@ -455,12 +639,37 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column'
   },
   headerTitle: {
-    fontSize: '16px',
-    fontWeight: '600'
+    fontSize: '14px',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em'
   },
   headerSubtitle: {
-    fontSize: '12px',
-    opacity: 0.9
+    fontSize: '10px',
+    color: '#6b7280',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em'
+  },
+  backButton: {
+    background: 'transparent',
+    border: 'none',
+    color: '#111318',
+    fontSize: '22px',
+    cursor: 'pointer',
+    width: '32px',
+    height: '32px',
+    lineHeight: '1'
+  },
+  moreButton: {
+    background: 'transparent',
+    border: 'none',
+    color: '#111318',
+    fontSize: '20px',
+    cursor: 'pointer',
+    width: '32px',
+    height: '32px',
+    lineHeight: '1'
   },
   closeButton: {
     background: 'none',
@@ -475,7 +684,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     flex: 1,
     overflowY: 'auto',
     padding: '16px',
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#fafafa'
+  },
+  messagesContainerFullScreen: {
+    paddingBottom: '88px'
   },
   loadingContainer: {
     display: 'flex',
@@ -546,6 +758,32 @@ const styles: { [key: string]: React.CSSProperties } = {
     lineHeight: '1.4',
     whiteSpace: 'pre-wrap'
   },
+  attachmentWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  attachmentImage: {
+    maxWidth: '220px',
+    maxHeight: '220px',
+    borderRadius: '10px',
+    objectFit: 'cover'
+  },
+  attachmentName: {
+    fontSize: '11px',
+    opacity: 0.8
+  },
+  fileLink: {
+    color: 'inherit',
+    textDecoration: 'underline',
+    fontWeight: 600,
+    fontSize: '13px'
+  },
+  fileLinkInner: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px'
+  },
   readStatus: {
     fontSize: '11px',
     marginLeft: '4px',
@@ -555,8 +793,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     padding: '8px 12px',
     gap: '6px',
-    backgroundColor: '#ffffff',
-    borderTop: '1px solid #dbdbdb'
+    backgroundColor: '#ffffff'
+  },
+  inputContainerFullScreen: {
+    position: 'fixed',
+    bottom: 0,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '100%',
+    maxWidth: '420px',
+    zIndex: 30,
+    backgroundColor: '#ffffff'
   },
   input: {
     flex: 1,
@@ -565,6 +812,10 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '20px',
     fontSize: '15px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    color: '#111318',
+    backgroundColor: '#ffffff',
+    caretColor: '#111318',
+    opacity: 1,
     resize: 'none',
     outline: 'none',
     height: '32px',
@@ -572,6 +823,19 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxHeight: '100px',
     lineHeight: '18px',
     overflowY: 'hidden'
+  },
+  attachButton: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    border: 'none',
+    backgroundColor: '#f3f4f6',
+    color: '#111318',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
   sendButton: {
     padding: '0',

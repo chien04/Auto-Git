@@ -117,6 +117,10 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
         // Notify extension about new message
         vscode.postMessage({ type: 'newMessage', message });
       });
+
+      wsService.subscribeToNotifications(userId, (notification) => {
+        window.postMessage({ type: 'websocketNotification', notification }, '*');
+      });
     } catch (error) {
     }
   };
@@ -159,6 +163,7 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     // Don't auto-refresh to avoid flickering
     // User can manually refresh if needed, or it will auto-update on next message
   };
+
 
   if (loading) {
     return (

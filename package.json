@@ -11,7 +11,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:autoGitClassroom"
+    "onView:autoGitClassroom",
+    "onCommand:auto-git.createCodeCommentFromSelection",
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -23,8 +25,21 @@
       {
         "command": "auto-git.logout",
         "title": "Auto Git: Logout"
+      },
+      {
+        "command": "auto-git.createCodeCommentFromSelection",
+        "title": "Auto Git: Comment Selected Code"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "auto-git.createCodeCommentFromSelection",
+          "when": "editorHasSelection",
+          "group": "navigation@99"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {

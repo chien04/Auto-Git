@@ -23,6 +23,9 @@ export class GitService {
 
     constructor() {}
 
+    /**
+     * Clone repository with authentication token
+     */
     async cloneRepository(options: CloneOptions): Promise<void> {
         try {
             // Ensure local path exists
@@ -30,6 +33,8 @@ export class GitService {
                 fs.mkdirSync(options.localPath, { recursive: true });
             }
 
+            // Build authenticated URL
+            // Format: https://x-access-token:TOKEN@github.com/owner/repo.git
             const authenticatedUrl = this.buildAuthenticatedUrl(options.repoUrl, options.token);
 
             const gitOptions: Partial<SimpleGitOptions> = {
@@ -220,6 +225,8 @@ export class GitService {
         // Remove .git suffix if present
         const cleanUrl = repoUrl.replace(/\.git$/, '');
         
+        // Extract parts from GitHub URL
+        // Example: https://github.com/owner/repo
         const match = cleanUrl.match(/https:\/\/github\.com\/(.+)/);
         
         if (!match) {
@@ -260,12 +267,16 @@ export class GitService {
         return this.autoPushEnabled;
     }
 
+    getAssignmentCode(): string | null {
+        return this.assignmentCode;
+    }
+
     /**
      * Auto commit and push changes
      */
-    async autoPush(filePath?: string): Promise<void> {
+    async autoPush(filePath?: string): Promise<boolean> {
         if (!this.git || !this.workspacePath || !this.autoPushEnabled) {
-            return;
+            return false;
         }
 
         try {
@@ -300,7 +311,7 @@ export class GitService {
             
             if (status.files.length === 0) {
                 console.log('No changes to commit - repository is clean');
-                return;
+                return false;
             }
 
             // Add all changes
@@ -356,17 +367,7 @@ export class GitService {
                     }
                     
                     console.log(`✅ Auto-pushed changes to ${this.branch}`);
-                    
-                    // Update commit count in backend after successful push
-                    if (this.apiService && this.assignmentCode) {
-                        try {
-                            await this.apiService.updateAssignmentCommitCount(this.assignmentCode);
-                            console.log('[DEBUG] ✅ Commit count updated in backend');
-                        } catch (apiError) {
-                            console.error('[DEBUG] Failed to update commit count:', apiError);
-                            // Don't throw - push was successful, just log the error
-                        }
-                    }
+                    return true;
                 } catch (pushError: any) {
                     console.error('[DEBUG] Push error:', pushError.message);
                     // If push failed due to remote changes, pull and retry
@@ -389,16 +390,7 @@ export class GitService {
                                 await this.git.push(authenticatedUrl, this.branch);
                             }
                             console.log(`Auto-pushed changes to ${this.branch} after pull`);
-                            
-                            // Update commit count in backend after successful push
-                            if (this.apiService && this.assignmentCode) {
-                                try {
-                                    await this.apiService.updateAssignmentCommitCount(this.assignmentCode);
-                                    console.log('[DEBUG] ✅ Commit count updated in backend after pull');
-                                } catch (apiError) {
-                                    console.error('[DEBUG] Failed to update commit count:', apiError);
-                                }
-                            }
+                            return true;
                         } catch (pullError: any) {
                             console.error('Failed to pull and push:', pullError);
                             throw new Error(`Failed to sync with remote: ${pullError.message}`);
@@ -408,6 +400,8 @@ export class GitService {
                     }
                 }
             }
+
+            return false;
         } catch (error: any) {
             console.error('Auto-push failed:', error);
             throw new Error(`Auto-push failed: ${error.message}`);

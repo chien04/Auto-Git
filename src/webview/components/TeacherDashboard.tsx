@@ -7,6 +7,9 @@ import CreateAssignmentForm from './CreateAssignmentForm';
 import AssignmentList from './AssignmentList';
 import BottomNavigation from './BottomNavigation';
 import ChatView from './ChatView';
+import NotificationView from './NotificationView';
+import ChatWindow from './ChatWindow';
+import { MessageType } from '../services/websocketService';
 
 interface TeacherDashboardProps {
   vscode: any;
@@ -39,10 +42,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
   const [showCreateAssignmentForm, setShowCreateAssignmentForm] = useState(false);
   const [viewStudentList, setViewStudentList] = useState(false);
   const [classStats, setClassStats] = useState<{totalStudents: number, studentsSubmitted: number, studentsNotSubmitted: number, submittedPercentage: number, notSubmittedPercentage: number} | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'notification' | 'settings'>('dashboard');
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatConfig, setChatConfig] = useState<any>(null);
+  const [chatConfig, setChatConfig] = useState<{
+    otherUserId?: number;
+    otherUserName?: string;
+    classroomId?: number;
+    classroomName?: string;
+    chatType: MessageType;
+  } | null>(null);
   const [isViewingAssignmentDetail, setIsViewingAssignmentDetail] = useState(false);
+  const isChatDetailOpen = activeTab === 'chat' && chatOpen && !!chatConfig;
 
   useEffect(() => {
     // Listen for messages from extension
@@ -117,8 +127,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     setChatOpen(true);
   };
 
-  const handleTabChange = (tab: 'dashboard' | 'chat' | 'settings') => {
+  const handleTabChange = (tab: 'dashboard' | 'chat' | 'notification' | 'settings') => {
     setActiveTab(tab);
+    if (tab !== 'dashboard') {
+      setSelectedClass(null);
+      setViewStudentList(false);
+      setShowCreateAssignmentForm(false);
+    }
     if (tab === 'chat') {
       // Show chat view
       setChatOpen(false); // Reset individual chat
@@ -278,7 +293,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
         </div>
 
         {/* Bottom Navigation */}
-        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
         </div>
       </div>
     );
@@ -288,6 +303,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     <div className="min-h-screen flex items-center justify-center">
       <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
       {/* Header */}
+      {!isChatDetailOpen && (
       <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
@@ -311,15 +327,33 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
           </button>
         </div>
       </header>
+      )}
 
       {/* Conditional Content Based on Active Tab */}
       {activeTab === 'chat' ? (
-        <ChatView
-          vscode={vscode}
-          currentUser={user}
-          onOpenChat={handleOpenChat}
-          onChatClosed={() => setChatOpen(false)}
-        />
+        chatOpen && chatConfig ? (
+          <ChatWindow
+            vscode={vscode}
+            currentUserId={parseInt(user.userId)}
+            currentUserName={user.name}
+            otherUserId={chatConfig.otherUserId}
+            otherUserName={chatConfig.otherUserName}
+            classroomId={chatConfig.classroomId}
+            classroomName={chatConfig.classroomName}
+            chatType={chatConfig.chatType}
+            onClose={() => setChatOpen(false)}
+            fullScreen={true}
+          />
+        ) : (
+          <ChatView
+            vscode={vscode}
+            currentUser={user}
+            onOpenChat={handleOpenChat}
+            onChatClosed={() => setChatOpen(false)}
+          />
+        )
+      ) : activeTab === 'notification' ? (
+        <NotificationView vscode={vscode} />
       ) : activeTab === 'dashboard' ? (
         <>
 
@@ -419,7 +453,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
       ) : null}
 
       {/* Bottom Navigation */}
-      <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+      {!isChatDetailOpen && (
+        <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+      )}
+
       </div>
     </div>
   );

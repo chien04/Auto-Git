@@ -70,6 +70,41 @@ export interface ClassStatistics {
     isActive: boolean;
 }
 
+export interface CreateCodeCommentRequest {
+    assignmentCode: string;
+    targetBranch: string;
+    studentFilePath: string;
+    filePath?: string;
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+    selectedText?: string;
+    comment: string;
+}
+
+export interface CodeCommentResponse {
+    id: number;
+    assignmentId: number;
+    studentId: number;
+    targetBranch: string;
+    studentFilePath: string;
+    filePath?: string;
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+    selectedText?: string;
+    content: string;
+    authorId: number;
+    authorName: string;
+    status: 'OPEN' | 'RESOLVED' | 'DELETED';
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ResolveCommentResponse extends CodeCommentResponse {}
+
 export class ApiService {
     private api: AxiosInstance;
     private baseURL: string;
@@ -91,24 +126,24 @@ export class ApiService {
                 if (this.jwtToken) {
                     config.headers.Authorization = `Bearer ${this.jwtToken}`;
                 }
-                
+
                 // Log API call for debugging
                 const method = (config.method || 'GET').toUpperCase();
                 const url = config.url || '';
                 const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
-                
+
                 console.log(`🌐 [API ${method}] ${fullUrl}`);
-                
+
                 // Log payload if exists
                 if (config.data) {
                     console.log(`📤 [Payload]`, config.data);
                 }
-                
+
                 // Log query params if exists
                 if (config.params) {
                     console.log(`📤 [Params]`, config.params);
                 }
-                
+
                 return config;
             },
             (error) => {
@@ -299,8 +334,8 @@ export class ApiService {
             throw new Error(`Failed to get student branches: ${error.response?.data?.message || error.message}`);
         }
     }
-    
-    async requestOTP(email: string): Promise<{success: boolean, message: string}> {
+
+    async requestOTP(email: string): Promise<{ success: boolean, message: string }> {
         try {
             const response = await this.api.post('/auth/otp/request', { email });
             return response.data;
@@ -308,7 +343,7 @@ export class ApiService {
             throw new Error(`Failed to request OTP: ${error.response?.data?.message || error.message}`);
         }
     }
-    
+
     async verifyOTP(email: string, otp: string, role: string): Promise<LoginResponse> {
         try {
             const response = await this.api.post('/auth/otp/verify', { email, otp, role });
@@ -319,11 +354,11 @@ export class ApiService {
             throw new Error(`Failed to verify OTP: ${error.response?.data?.name || error.message}`);
         }
     }
-    
+
     /**
      * Get my classes (both as teacher and student)
      */
-    async getMyClasses(): Promise<{teacherClasses: any[], studentClasses: any[]}> {
+    async getMyClasses(): Promise<{ teacherClasses: any[], studentClasses: any[] }> {
         try {
             const response = await this.api.get('/class/my-classes');
             return response.data;
@@ -331,7 +366,7 @@ export class ApiService {
             throw new Error(`Failed to get classes: ${error.response?.data?.message || error.message}`);
         }
     }
-    
+
     /**
      * Get students in a class
      */
@@ -343,7 +378,7 @@ export class ApiService {
             throw new Error(`Failed to get students: ${error.response?.data?.message || error.message}`);
         }
     }
-    
+
     /**
      * Delete a class (Teacher)
      */
@@ -358,7 +393,7 @@ export class ApiService {
             throw new Error(`Failed to delete class: ${error.response?.data?.message || error.message}`);
         }
     }
-    
+
     /**
      * Leave a class (Student)
      */
@@ -456,9 +491,9 @@ export class ApiService {
             console.log('[API] Syncing workspace for class:', classCode);
             console.log('[API] Request URL:', `${this.baseURL}/class/${classCode}/workspace/sync`);
             console.log('[API] Token:', this.jwtToken ? 'Present' : 'Missing');
-            
+
             const response = await this.api.post(`/class/${classCode}/workspace/sync`);
-            
+
             console.log('[API] Sync workspace response:', response.data);
             return response.data;
         } catch (error: any) {
@@ -531,6 +566,16 @@ export class ApiService {
         }
     }
 
+    async getStudentLocalPath(assignmentCode: string): Promise<{ localPath: string, exists: boolean, branchName?: string }> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}/student/localPath`);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Get student local path error:', error);
+            throw new Error(`Failed to get local path: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
     /**
      * Remove student from class (Teacher only)
      */
@@ -569,9 +614,9 @@ export class ApiService {
         try {
             console.log('[API] Calling updateCommitCount for assignment:', assignmentCode);
             console.log('[API] JWT Token exists:', !!this.jwtToken);
-            
+
             const response = await this.api.post(`/assignment/${assignmentCode}/update-commits`);
-            
+
             console.log('[API] Update commit count SUCCESS:', response.data);
             return response.data;
         } catch (error: any) {
@@ -628,6 +673,60 @@ export class ApiService {
         }
     }
 
+    /**
+ * Export assignment scores to Excel
+ */
+    async exportAssignmentExcel(assignmentId: string): Promise<ArrayBuffer> {
+        try {
+            const response = await this.api.get(`/assignment/export-excel/${parseInt(assignmentId, 10)}`, {
+                responseType: 'arraybuffer',
+                headers: {
+                    Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                }
+            });
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Export assignment excel ERROR:', error);
+            throw new Error(`Failed to export excel: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    async createCodeComment(payload: CreateCodeCommentRequest): Promise<CodeCommentResponse> {
+        try {
+            const response = await this.api.post('/assignment/comments', payload);
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Create code comment ERROR:', error);
+            throw new Error(`Failed to create comment: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    async getCodeComments(assignmentCode: string, targetBranch: string, studentFilePath: string): Promise<CodeCommentResponse[]> {
+        try {
+            const response = await this.api.get('/assignment/comments', {
+                params: {
+                    assignmentCode,
+                    targetBranch,
+                    studentFilePath
+                }
+            });
+            return response.data || [];
+        } catch (error: any) {
+            console.error('[API] Get code comments ERROR:', error);
+            throw new Error(`Failed to get comments: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
+    async resolveCodeComment(commentId: number): Promise<ResolveCommentResponse> {
+        try {
+            const response = await this.api.patch(`/assignment/comments/${commentId}/resolve`, {});
+            return response.data;
+        } catch (error: any) {
+            console.error('[API] Resolve code comment ERROR:', error);
+            throw new Error(`Failed to resolve comment: ${error.response?.data?.error || error.message}`);
+        }
+    }
+
     // ===================== CHAT API =====================
 
     async getClassesWithMessages(): Promise<any[]> {
@@ -660,6 +759,21 @@ export class ApiService {
 
     async markMessageAsRead(messageId: number): Promise<void> {
         await this.api.post(`/messages/${messageId}/read`, {});
+    }
+
+    // ===================== NOTIFICATION API =====================
+
+    async getNotifications(): Promise<any[]> {
+        const response = await this.api.get('/notifications');
+        return response.data || [];
+    }
+
+    async markNotificationAsRead(notificationId: number): Promise<void> {
+        await this.api.patch(`/notifications/${notificationId}/read`, {});
+    }
+
+    async markAllNotificationsAsRead(): Promise<void> {
+        await this.api.patch('/notifications/read-all', {});
     }
 }
 
