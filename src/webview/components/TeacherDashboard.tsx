@@ -174,10 +174,25 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     );
   }
 
-  if (selectedClass) {
+  if (selectedClass && showCreateAssignmentForm) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+          <CreateAssignmentForm
+            vscode={vscode}
+            user={user}
+            classCode={selectedClass.classCode}
+            onClose={() => setShowCreateAssignmentForm(false)}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedClass) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="relative flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
         {/* Header matching main dashboard */}
         <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
           <div className="flex items-center gap-2">
@@ -248,15 +263,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
           </>
         )}
 
-        {showCreateAssignmentForm && (
-          <CreateAssignmentForm
-            vscode={vscode}
-            user={user}
-            classCode={selectedClass.classCode}
-            onClose={() => setShowCreateAssignmentForm(false)}
-          />
-        )}
-
         {/* Assignments Section */}
         <div className="flex-1 overflow-y-auto pb-24">
           <AssignmentList
@@ -293,7 +299,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
         </div>
 
         {/* Bottom Navigation */}
-        <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+        {!showCreateAssignmentForm && (
+          <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+        )}
         </div>
       </div>
     );

@@ -1,4 +1,10 @@
 import React, { useState } from 'react';
+import 'katex/dist/katex.min.css';
+
+const ReactMarkdown = require('react-markdown').default;
+const remarkGfm = require('remark-gfm').default;
+const remarkMath = require('remark-math').default;
+const rehypeKatex = require('rehype-katex').default;
 
 interface CreateAssignmentFormProps {
   vscode: any;
@@ -7,39 +13,88 @@ interface CreateAssignmentFormProps {
   onClose: () => void;
 }
 
+const DESCRIPTION_TEMPLATE = `
+### Mô tả bài toán
+Cho ...
+
+### Định dạng đầu vào (Input)
+- Dòng đầu tiên chứa số nguyên $T$ - số lượng bộ test.
+- Mỗi bộ test gồm...
+
+### Định dạng đầu ra (Output)
+- Với mỗi bộ test, in ra... trên một dòng.
+
+### Giới hạn (Constraints)
+- $1 \\le T \\le 100$
+- $1 \\le N \\le 10^5$
+- Thời gian chạy: 1.0s
+- Bộ nhớ: 256MB
+
+---
+
+### Ví dụ (Example)
+
+**Input:** \`5\`  
+**Output:** \`120\`
+
+**Giải thích:** Vì $5! = 1 \\times 2 \\times 3 \\times 4 \\times 5 = 120$.
+
+---
+### Gợi ý / Note (nếu có)
+- Chú ý xử lý số nguyên lớn.`;
+
 const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, user, classCode, onClose }) => {
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(DESCRIPTION_TEMPLATE);
   const [deadline, setDeadline] = useState('');
   const [message, setMessage] = useState('');
-  
-  // Test cases state
+  const [descriptionMode, setDescriptionMode] = useState<'write' | 'preview'>('write');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [testCasesFile, setTestCasesFile] = useState<{
     name: string;
     size: number;
     base64: string;
   } | null>(null);
-  const [showTestCasesSection, setShowTestCasesSection] = useState(false);
-  const [createdAssignmentCode, setCreatedAssignmentCode] = useState<string | null>(null);
+  const descriptionRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const msg = event.data;
       console.log('[DEBUG] Received message:', msg);
-      
+
       if (msg.command === 'createAssignmentSuccess') {
         const assignmentCode = msg.data.assignmentCode;
         console.log('[DEBUG] Assignment created:', assignmentCode);
-        setCreatedAssignmentCode(assignmentCode);
+
+        if (testCasesFile) {
+          vscode.postMessage({
+            type: 'uploadTestCasesZip',
+            assignmentCode,
+            fileName: testCasesFile.name,
+            fileContent: testCasesFile.base64
+          });
+          setMessage('⏳ Bài tập đã tạo, đang upload test cases...');
+          return;
+        }
+
+        vscode.postMessage({
+          type: 'skipTestCases',
+          assignmentCode
+        });
         setMessage(`✅ Bài tập đã được tạo! Mã: ${assignmentCode}`);
-        setShowTestCasesSection(true);
+        setIsSubmitting(false);
+        setTimeout(() => {
+          vscode.postMessage({ type: 'assignmentCreated', classCode });
+          onClose();
+        }, 700);
       } else if (msg.command === 'createAssignmentError') {
         console.log('[DEBUG] Create assignment error:', msg.error);
         setMessage(`❌ Lỗi: ${msg.error}`);
+        setIsSubmitting(false);
       } else if (msg.command === 'uploadTestCasesSuccess') {
         console.log('[DEBUG] Upload test cases success');
-        setMessage(`✅ Test cases đã được upload thành công!`);
-        // Extension will auto-open folder after upload
+        setMessage('✅ Test cases đã được upload thành công!');
+        setIsSubmitting(false);
         setTimeout(() => {
           vscode.postMessage({ type: 'assignmentCreated', classCode });
           onClose();
@@ -47,75 +102,36 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
       } else if (msg.command === 'uploadTestCasesError') {
         console.log('[DEBUG] Upload test cases error:', msg.error);
         setMessage(`❌ Lỗi upload test cases: ${msg.error}`);
+        setIsSubmitting(false);
       }
     };
+
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [vscode, classCode, onClose]);
+  }, [vscode, classCode, onClose, testCasesFile]);
+
+  React.useEffect(() => {
+    if (descriptionRef.current) {
+      descriptionRef.current.style.height = 'auto';
+      descriptionRef.current.style.height = `${Math.max(220, descriptionRef.current.scrollHeight)}px`;
+    }
+  }, []);
 
   const handleCreateAssignment = () => {
     if (!title) {
       setMessage('Vui lòng nhập tên bài tập');
       return;
     }
-    vscode.postMessage({ 
-      type: 'createAssignment', 
+
+    setIsSubmitting(true);
+    vscode.postMessage({
+      type: 'createAssignment',
       classCode,
-      title, 
+      title,
       description,
-      deadline: deadline || null 
+      deadline: deadline || null
     });
-    setMessage('Đang tạo bài tập...');
-  };
-
-  const handleUploadTestCases = async () => {
-    console.log('[DEBUG] handleUploadTestCases called');
-    console.log('[DEBUG] createdAssignmentCode:', createdAssignmentCode);
-    console.log('[DEBUG] testCasesFile:', testCasesFile?.name);
-    
-    if (!createdAssignmentCode) {
-      console.log('[DEBUG] No assignment code!');
-      setMessage('❌ Chưa có mã bài tập');
-      return;
-    }
-
-    if (!testCasesFile) {
-      console.log('[DEBUG] No test cases file!');
-      setMessage('❌ Vui lòng chọn file ZIP test cases');
-      return;
-    }
-
-    try {
-      console.log('[DEBUG] Sending uploadTestCases message with base64 length:', testCasesFile.base64.length);
-      vscode.postMessage({ 
-        type: 'uploadTestCasesZip', 
-        assignmentCode: createdAssignmentCode,
-        fileName: testCasesFile.name,
-        fileContent: testCasesFile.base64
-      });
-      setMessage('⏳ Đang upload test cases...');
-    } catch (error: any) {
-      console.error('[DEBUG] Error:', error);
-      setMessage(`❌ Lỗi upload: ${error.message}`);
-    }
-  };
-
-  const handleSkipTestCases = () => {
-    if (!createdAssignmentCode) {
-      return;
-    }
-    
-    // Send skip message to extension to open folder
-    vscode.postMessage({ 
-      type: 'skipTestCases', 
-      assignmentCode: createdAssignmentCode
-    });
-    
-    // Close form after sending message
-    setTimeout(() => {
-      vscode.postMessage({ type: 'assignmentCreated', classCode });
-      onClose();
-    }, 500);
+    setMessage(testCasesFile ? 'Đang tạo bài tập và chuẩn bị upload test cases...' : 'Đang tạo bài tập...');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,29 +141,27 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
         setMessage('❌ Chỉ chấp nhận file .zip');
         return;
       }
-      
-      // Read file and convert to base64 immediately
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const arrayBuffer = event.target?.result as ArrayBuffer;
         const bytes = new Uint8Array(arrayBuffer);
-        const base64 = btoa(
-          bytes.reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-        
+        const base64 = btoa(bytes.reduce((data, byte) => data + String.fromCharCode(byte), ''));
+
         setTestCasesFile({
           name: file.name,
           size: file.size,
-          base64: base64
+          base64
         });
-        setMessage('✓ File đã sẵn sàng upload');
       };
-      
+
       reader.onerror = () => {
         setMessage('❌ Lỗi đọc file');
       };
-      
+
       reader.readAsArrayBuffer(file);
+    } else {
+      setTestCasesFile(null);
     }
   };
 
@@ -156,10 +170,55 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
     handleCreateAssignment();
   };
 
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDescription(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.max(220, e.target.scrollHeight)}px`;
+  };
+
+  const markdownPreviewComponents = {
+    h1: ({ children }: { children?: React.ReactNode }) => (
+      <h1 className="mb-3 text-2xl font-extrabold tracking-tight text-[#111318]">{children}</h1>
+    ),
+    h2: ({ children }: { children?: React.ReactNode }) => (
+      <h2 className="mb-2 mt-5 text-xl font-bold text-[#111318]">{children}</h2>
+    ),
+    h3: ({ children }: { children?: React.ReactNode }) => (
+      <h3 className="mb-2 mt-4 text-lg font-bold text-[#111318]">{children}</h3>
+    ),
+    p: ({ children }: { children?: React.ReactNode }) => (
+      <p className="mb-3 leading-7 text-[#424656]">{children}</p>
+    ),
+    ul: ({ children }: { children?: React.ReactNode }) => (
+      <ul className="mb-3 ml-5 list-disc space-y-1 text-[#424656]">{children}</ul>
+    ),
+    ol: ({ children }: { children?: React.ReactNode }) => (
+      <ol className="mb-3 ml-5 list-decimal space-y-1 text-[#424656]">{children}</ol>
+    ),
+    li: ({ children }: { children?: React.ReactNode }) => <li className="leading-7">{children}</li>,
+    strong: ({ children }: { children?: React.ReactNode }) => (
+      <strong className="font-bold text-[#111318]">{children}</strong>
+    ),
+    code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => {
+      if (inline) {
+        return (
+          <code className="rounded bg-[#ecedfa] px-1.5 py-0.5 font-mono text-[0.9em] text-[#135bec]">
+            {children}
+          </code>
+        );
+      }
+
+      return (
+        <pre className="mb-3 overflow-x-auto rounded-lg bg-[#191b24] p-4 text-sm text-white">
+          <code>{children}</code>
+        </pre>
+      );
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[1000] bg-white">
-      <div className="flex flex-col h-full max-w-[420px] w-full mx-auto">
-        {/* Header matching TeacherDashboard */}
+    <div className="bg-white w-full">
+      <div className="flex flex-col min-h-screen w-full">
         <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
@@ -172,9 +231,9 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Giáo viên'}</span>
             <div className="w-px h-4 bg-[#dbdfe6]"></div>
-            <button 
+            <button
               onClick={() => vscode.postMessage({ type: 'logout' })}
-              className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors" 
+              className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
               title="Đăng xuất"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,195 +243,150 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
           </div>
         </header>
 
-        {/* Title Section */}
         <div className="px-4 pt-6 pb-4">
-          <h1 className="text-2xl font-black tracking-tight text-[#111318]">
-            Tạo bài tập mới
-          </h1>
+          <h1 className="text-2xl font-black tracking-tight text-[#111318]">Tạo bài tập mới</h1>
         </div>
 
-        {/* Form Section */}
-        <form onSubmit={handleSubmit} className="flex-1 px-4 space-y-4 overflow-y-auto">
-          {/* Show normal form OR test cases section */}
-          {!showTestCasesSection ? (
-            <>
-              {/* Assignment Name */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89]">
-                  Tên bài tập
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-3 text-base bg-white border-2 border-[#dbdfe6] rounded-lg text-black focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all placeholder:text-[#616f89]"
-                  placeholder="Ví dụ: Bài tập tuần 1 - OOP"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
+        <form onSubmit={handleSubmit} className="px-4 pb-6 space-y-4">
+          <div className="bg-white rounded-xl border border-[#dbdfe6] p-4">
+            <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-2">
+              Tên bài tập
+            </label>
+            <input
+              type="text"
+              className="w-full px-4 py-3 text-base bg-white border border-[#dbdfe6] rounded-lg text-black focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all placeholder:text-[#9ca3af]"
+              placeholder="Ví dụ: Bài tập tuần 1 - OOP"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
 
-              {/* Description */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89]">
-                  Mô tả
-                </label>
-                <textarea
-                  className="w-full px-4 py-3 text-base bg-white border-2 border-[#dbdfe6] rounded-lg text-black focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all placeholder:text-[#616f89] resize-none"
-                  placeholder="Mô tả chi tiết về bài tập..."
-                  rows={5}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-
-              {/* Deadline */}
-              <div className="space-y-2">
-                <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89]">
-                  Deadline
-                </label>
-                <div className="relative">
-                  <input
-                    type="datetime-local"
-                    className="w-full px-4 py-3 text-base bg-white border-2 border-[#dbdfe6] rounded-lg focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all text-[#111318]"
-                    value={deadline}
-                    onChange={(e) => setDeadline(e.target.value)}
-                  />
+          <div className="bg-white rounded-xl border border-[#dbdfe6] overflow-hidden">
+            <div className="px-4 pt-4 pb-3">
+              <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-3">
+                Mô tả
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex p-1 bg-[#f3f4f6] rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode('write')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                      descriptionMode === 'write' ? 'bg-white text-[#135bec] shadow-sm' : 'text-[#616f89] hover:text-[#111318]'
+                    }`}
+                  >
+                    Soạn thảo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescriptionMode('preview')}
+                    className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                      descriptionMode === 'preview' ? 'bg-white text-[#135bec] shadow-sm' : 'text-[#616f89] hover:text-[#111318]'
+                    }`}
+                  >
+                    Xem trước
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {/* Message Display */}
-              {message && (
-                <div className="p-4 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20">
-                  <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
+            <div className="p-4">
+              {descriptionMode === 'write' ? (
+                <textarea
+                  ref={descriptionRef}
+                  className="w-full min-h-[220px] px-4 py-3 text-sm bg-[#fafafa] border border-[#dbdfe6] rounded-lg text-black focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all placeholder:text-[#9ca3af] resize-none overflow-hidden font-mono"
+                  placeholder="Nhập mô tả bài tập bằng Markdown tại đây..."
+                  value={description}
+                  onChange={handleDescriptionChange}
+                />
+              ) : (
+                <div className="min-h-[220px] px-4 py-3 bg-[#fafafa] border border-[#dbdfe6] rounded-lg text-sm leading-relaxed text-[#424656] overflow-x-auto markdown-preview">
+                  {description.trim() ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
+                      {description}
+                    </ReactMarkdown>
+                  ) : (
+                    <div className="text-[#9ca3af]">
+                      Chưa có nội dung mô tả. Hãy nhập Markdown ở chế độ Soạn thảo.
+                    </div>
+                  )}
                 </div>
               )}
+            </div>
+          </div>
 
-              {/* Visual Divider */}
-              <div className="pt-4 border-t border-[#dbdfe6]"></div>
+          <div className="bg-white rounded-xl border border-[#dbdfe6] p-4">
+            <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-2">
+              Deadline
+            </label>
+            <input
+              type="datetime-local"
+              className="w-full px-4 py-3 text-base bg-white border border-[#dbdfe6] rounded-lg focus:border-[#135bec] focus:ring-0 focus:outline-none transition-all text-[#111318]"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+            />
+          </div>
 
-              {/* Actions */}
-              <div className="flex flex-col gap-3 pb-6">
-                <button
-                  type="submit"
-                  className="w-full py-4 bg-[#135bec] text-white font-bold rounded-lg hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Tạo bài tập
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full py-3 bg-transparent text-[#616f89] font-medium rounded-lg hover:text-red-500 transition-colors text-sm"
-                >
-                  Hủy
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Test Cases Section - Show after assignment created */}
-              <div className="pt-6 border-t-2 border-[#135bec]/20"></div>
-              
-              <div className="space-y-3">
-                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-xs text-blue-800">
-                    <p className="font-semibold mb-1">Bước 2: Upload Test Cases (Tùy chọn)</p>
-                    <p className="text-blue-700">Upload file ZIP chứa test cases hoặc bỏ qua và upload sau</p>
+          <div className="bg-white rounded-xl border border-[#dbdfe6] p-4">
+            <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-2">
+              File test cases (.zip)
+            </label>
+            <div className="relative">
+              <input
+                type="file"
+                accept=".zip"
+                onChange={handleFileChange}
+                className="hidden"
+                id="testCasesFileInput"
+              />
+              <label
+                htmlFor="testCasesFileInput"
+                className="flex flex-col items-center justify-center w-full px-4 py-6 border-2 border-dashed border-[#dbdfe6] rounded-lg cursor-pointer bg-[#fafafa] hover:bg-[#f3f4f6] transition-colors"
+              >
+                <svg className="w-10 h-10 text-[#616f89] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                {testCasesFile ? (
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-[#135bec]">{testCasesFile.name}</p>
+                    <p className="text-xs text-[#616f89] mt-1">{(testCasesFile.size / 1024).toFixed(2)} KB</p>
                   </div>
-                </div>
-
-                <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89]">
-                  File Test Cases (.zip)
-                </label>
-                
-                {/* File Upload Area */}
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".zip"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="testCasesFileInput"
-                  />
-                  <label
-                    htmlFor="testCasesFileInput"
-                    className="flex flex-col items-center justify-center w-full px-4 py-8 border-2 border-dashed border-[#dbdfe6] rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <svg className="w-12 h-12 text-[#616f89] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    {testCasesFile ? (
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-[#135bec]">{testCasesFile.name}</p>
-                        <p className="text-xs text-[#616f89] mt-1">{(testCasesFile.size / 1024).toFixed(2)} KB</p>
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-[#616f89]">Click để chọn file ZIP</p>
-                        <p className="text-xs text-[#9ca3af] mt-1">hoặc kéo thả file vào đây</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-
-                {/* Structure Info */}
-                <details className="text-xs text-[#616f89]">
-                  <summary className="cursor-pointer font-semibold hover:text-[#135bec]">
-                    📘 Cấu trúc thư mục trong file ZIP
-                  </summary>
-                  <div className="mt-2 p-3 bg-gray-50 rounded border border-gray-200">
-                    <pre className="text-xs font-mono text-[#111318]">{`testcases.zip
-├── testcases/
-│   ├── ex1/
-│   │   ├── input1.txt
-│   │   ├── output1.txt
-│   │   ├── input2.txt
-│   │   └── output2.txt
-│   └── ex2/
-│       ├── input1.txt
-│       └── output1.txt`}</pre>
-                    <p className="text-xs text-[#616f89] mt-2">
-                      • Tên folder = tên bài tập (ex1, ex2, ...)<br/>
-                      • Mỗi cặp input/output được đánh số thứ tự (1, 2, 3, ...)<br/>
-                      • File input: input1.txt, input2.txt, ...<br/>
-                      • File output: output1.txt, output2.txt, ...
-                    </p>
-                  </div>
-                </details>
-
-                {/* Message Display */}
-                {message && (
-                  <div className="p-4 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20">
-                    <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-[#616f89]">Click để chọn file ZIP</p>
+                    <p className="text-xs text-[#9ca3af] mt-1">Tùy chọn, có thể để trống</p>
                   </div>
                 )}
+              </label>
+            </div>
+          </div>
 
-                <div className="flex gap-2 pb-6">
-                  <button
-                    type="button"
-                    onClick={handleUploadTestCases}
-                    className="flex-1 py-3 bg-green-600 text-white font-bold rounded-lg hover:opacity-90 transition-all flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    Upload Test Cases
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSkipTestCases}
-                    className="px-6 py-3 bg-gray-100 text-[#616f89] font-medium rounded-lg hover:bg-gray-200 transition-all"
-                  >
-                    Bỏ qua
-                  </button>
-                </div>
-              </div>
-            </>
+          {message && (
+            <div className="p-4 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20">
+              <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
+            </div>
           )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-transparent text-[#616f89] font-semibold rounded-lg border border-[#dbdfe6] hover:bg-gray-50 transition-colors text-sm disabled:opacity-60"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-[#135bec] text-white font-bold rounded-lg hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {isSubmitting ? 'Đang xử lý...' : 'Tạo bài tập'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

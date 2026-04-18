@@ -1,11 +1,18 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { ClassroomViewProvider } from './providers/classroomViewProvider';
 import { ApiService } from './services/apiService';
 import { GitService } from './services/gitService';
+import { getBaseDirectoryKey, getRoomData } from './utils/localWorkspaceStore';
 import simpleGit from 'simple-git';
+import {
+	checkGitInstalled,
+	notifyFrontendOfCurrentWorkspace,
+	restoreGitServiceState,
+	setupAutoPush,
+	tryOpenPendingNotificationFile
+} from './extension/runtimeLifecycle';
 
 let classroomViewProvider: ClassroomViewProvider;
 let apiService: ApiService;
@@ -33,7 +40,14 @@ interface FileCommentContext {
 	studentFilePath: string;
 }
 
+function isTeacherRole(context: vscode.ExtensionContext): boolean {
+	const classInfo = context.globalState.get<any>('current_class') || {};
+	return String(classInfo.role || '').toLowerCase() === 'teacher';
+}
+
 class SelectionCommentCodeLensProvider implements vscode.CodeLensProvider {
+	constructor(private readonly context: vscode.ExtensionContext) {}
+
 	private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
 	public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
@@ -44,6 +58,10 @@ class SelectionCommentCodeLensProvider implements vscode.CodeLensProvider {
 	provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
 		const editor = vscode.window.activeTextEditor;
 		if (!editor || editor.document.uri.toString() !== document.uri.toString()) {
+			return [];
+		}
+
+		if (!isTeacherRole(this.context)) {
 			return [];
 		}
 
@@ -112,29 +130,36 @@ function findBranchForFile(filePath: string, worktreeMap: WorktreeBranchMap): st
 }
 
 async function resolveBranchForEditorFile(workspaceRoot: string, editor: vscode.TextEditor): Promise<string | null> {
-	const relativeFilePath = vscode.workspace.asRelativePath(editor.document.uri, false).replace(/\\/g, '/');
 	let worktreeMap = await refreshWorktreeBranchMap(workspaceRoot);
 	let branch = findBranchForFile(editor.document.uri.fsPath, worktreeMap);
 
-	if (relativeFilePath.startsWith('students/') && (!branch || branch === 'teacher')) {
-		// Worktree list may be stale after sync/join; force refresh and retry once.
-		worktreeMap = await refreshWorktreeBranchMap(workspaceRoot, true);
-		branch = findBranchForFile(editor.document.uri.fsPath, worktreeMap);
-
-		if (!branch || branch === 'teacher') {
-			try {
-				const gitAtFileDir = simpleGit(path.dirname(editor.document.uri.fsPath));
-				const directBranch = (await gitAtFileDir.revparse(['--abbrev-ref', 'HEAD'])).trim();
-				if (directBranch && directBranch !== 'HEAD') {
-					branch = directBranch;
-				}
-			} catch (error: any) {
-				console.warn('[Comment] Direct git branch resolve failed:', error?.message || error);
-			}
-		}
-	}
-
 	return branch;
+}
+
+function resolveStudentBranchFromCodingRooms(
+	context: vscode.ExtensionContext,
+	assignmentCode: string
+): string | null {
+	try {
+		const userData = context.globalState.get<any>('user_data') || {};
+		const userId = userData.userId ? String(userData.userId) : '';
+		if (!userId) {
+			return null;
+		}
+
+		const baseDirectoryKey = getBaseDirectoryKey(userId);
+		const baseDirectory = context.globalState.get<string>(baseDirectoryKey);
+		if (!baseDirectory) {
+			return null;
+		}
+
+		const roomData = getRoomData(baseDirectory, userId, assignmentCode);
+		const branchName = roomData.room?.branchName?.trim();
+		return branchName || null;
+	} catch (error: any) {
+		console.warn('[Comment] Failed to resolve student branch from .coding-rooms.json:', error?.message || error);
+		return null;
+	}
 }
 
 async function notifyCurrentFileCommentContext(context: vscode.ExtensionContext, editor?: vscode.TextEditor) {
@@ -173,17 +198,13 @@ async function resolveCurrentFileCommentContext(
 	const role = String(classInfo.role || '').toLowerCase();
 	let targetBranch: string | null = null;
 
-	if (role === 'student' && classInfo.branch) {
-		targetBranch = classInfo.branch;
+	if (role === 'student') {
+		targetBranch = resolveStudentBranchFromCodingRooms(context, assignmentCode);
 	} else {
 		try {
 			targetBranch = await resolveBranchForEditorFile(workspaceRoot, editor);
 		} catch (error: any) {
 			console.error('[Comment] Failed to load worktree context:', error?.message || error);
-		}
-
-		if (!targetBranch && classInfo.branch) {
-			targetBranch = classInfo.branch;
 		}
 	}
 
@@ -339,7 +360,7 @@ async function loadAndRenderCommentsForEditor(
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('Auto Git Classroom extension is now active!');
-	const selectionCommentCodeLensProvider = new SelectionCommentCodeLensProvider();
+	const selectionCommentCodeLensProvider = new SelectionCommentCodeLensProvider(context);
 	const commentDecorationType = vscode.window.createTextEditorDecorationType({
 		after: {
 			margin: '0 0 0 3.2rem',
@@ -353,10 +374,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		backgroundColor: 'rgba(56, 189, 248, 0.24)'
 	});
 	
-	// Check if git is installed
 	checkGitInstalled();
 
-	// Initialize services
 	apiService = new ApiService('http://localhost:8080/api');
 	gitService = new GitService();
 
@@ -374,6 +393,12 @@ export async function activate(context: vscode.ExtensionContext) {
 			classroomViewProvider
 		)
 	);
+
+	const runtimeDeps = {
+		apiService,
+		gitService,
+		classroomViewProvider
+	};
 
 	// Register commands
 	const openClassroomCommand = vscode.commands.registerCommand(
@@ -398,6 +423,11 @@ export async function activate(context: vscode.ExtensionContext) {
 	const createCodeCommentCommand = vscode.commands.registerCommand(
 		'auto-git.createCodeCommentFromSelection',
 		async () => {
+			if (!isTeacherRole(context)) {
+				vscode.window.showWarningMessage('Chỉ giáo viên mới có thể tạo comment trên code.');
+				return;
+			}
+
 			const editor = vscode.window.activeTextEditor;
 			if (!editor) {
 				vscode.window.showWarningMessage('Không tìm thấy editor đang mở.');
@@ -413,7 +443,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			const selectedText = editor.document.getText(selection);
 			const comment = await vscode.window.showInputBox({
 				prompt: 'Nhập comment cho đoạn code đã chọn',
-				placeHolder: 'Ví dụ: Đoạn này cần xử lý null trước khi map()'
+				placeHolder: 'Ví dụ: Đoạn này cần xử lý null'
 			});
 
 			if (!comment || !comment.trim()) {
@@ -522,307 +552,40 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	// Setup auto-push on save
-	setupAutoPush(context);
-	console.log('✅ Auto-push listener registered');
+	setupAutoPush(context, runtimeDeps);
+	console.log('Auto-push listener registered');
 
 	// Restore git service state if student has joined a class
-	restoreGitServiceState(context);
+	await restoreGitServiceState(context, runtimeDeps);
 	await closeAllOpenEditors();
-	notifyCurrentFileCommentContext(context, vscode.window.activeTextEditor);
+	await tryOpenPendingNotificationFile(context);
 	suppressCommentAutoLoad = false;
+
+	const initialEditor = vscode.window.activeTextEditor;
+	notifyCurrentFileCommentContext(context, initialEditor);
+	await loadAndRenderCommentsForEditor(
+		context,
+		initialEditor,
+		commentDecorationType,
+		rangeHighlightDecorationType,
+		'initialActivation'
+	);
 	
 	// Listen for workspace folder changes to update UI
-	vscode.workspace.onDidChangeWorkspaceFolders(() => {
+	vscode.workspace.onDidChangeWorkspaceFolders(async () => {
 		console.log('[DEBUG] Workspace folders changed, restoring state...');
-		restoreGitServiceState(context);
-		notifyFrontendOfCurrentWorkspace(context);
+		await restoreGitServiceState(context, runtimeDeps);
+		await tryOpenPendingNotificationFile(context);
+		notifyCurrentFileCommentContext(context, vscode.window.activeTextEditor);
+		await loadAndRenderCommentsForEditor(
+			context,
+			vscode.window.activeTextEditor,
+			commentDecorationType,
+			rangeHighlightDecorationType,
+			'onDidChangeWorkspaceFolders'
+		);
+		notifyFrontendOfCurrentWorkspace(context, runtimeDeps);
 	});
-}
-
-function notifyFrontendOfCurrentWorkspace(context: vscode.ExtensionContext) {
-	try {
-		const workspaceFolders = vscode.workspace.workspaceFolders;
-		if (!workspaceFolders || workspaceFolders.length === 0) {
-			return;
-		}
-		
-		const folderName = workspaceFolders[0].uri.fsPath.split(/[\\/]/).pop() || '';
-		const assignmentCode = folderName.split('-')[0]; // First part is assignment code
-		
-		console.log('[DEBUG] Notifying frontend of current workspace:', assignmentCode);
-		
-		// Send to webview if it exists
-		if (classroomViewProvider) {
-			classroomViewProvider.notifyWorkspaceChanged(assignmentCode);
-		}
-	} catch (error) {
-		console.error('[DEBUG] Error notifying frontend:', error);
-	}
-}
-
-function setupAutoPush(context: vscode.ExtensionContext) {
-	// Listen to document save events
-	const saveListener = vscode.workspace.onDidSaveTextDocument(async (document) => {
-		try {
-			const classInfo = context.globalState.get<any>('current_class');
-			const autoPushEnabled = gitService.isAutoPushEnabled();
-			const workspacePath = gitService.getWorkspacePath();
-			
-			// Debug info
-			console.log('=== Save event triggered ===');
-			console.log('Class info:', classInfo);
-			console.log('Auto-push enabled:', autoPushEnabled);
-			console.log('Workspace path:', workspacePath);
-			console.log('File path:', document.uri.fsPath);
-			
-			// Auto-push for both students and teachers
-			if (classInfo && (classInfo.role === 'student' || classInfo.role === 'teacher') && autoPushEnabled) {
-				// Check if the saved file is in the workspace
-				if (workspacePath && document.uri.fsPath.startsWith(workspacePath)) {
-					console.log(`Auto-pushing changes for: ${document.fileName}`);
-					
-					// Small delay to ensure file is written
-					await new Promise(resolve => setTimeout(resolve, 500));
-					
-					try {
-						const pushed = await classroomViewProvider.handleAutoPush(classInfo);
-
-						if (pushed) {
-							vscode.window.showInformationMessage('✅ Đã push code lên GitHub!');
-							vscode.window.setStatusBarMessage(
-								'$(cloud-upload) Auto-pushed to GitHub',
-								3000
-							);
-						} else {
-							console.log('Save detected but no effective changes to push');
-						}
-					} catch (pushError: any) {
-						// Check if it's a deadline error
-						if (pushError.message && pushError.message.includes('Deadline')) {
-							vscode.window.showErrorMessage('⏰ Đã quá hạn nộp bài!');
-						} else {
-							vscode.window.showErrorMessage(`Lỗi push code: ${pushError.message}`);
-						}
-						// Don't re-throw, just return to avoid showing duplicate errors
-						return;
-					}
-				} else {
-					console.log('File not in workspace. Workspace:', workspacePath, 'File:', document.uri.fsPath);
-					vscode.window.showWarningMessage(`File không trong workspace. WS: ${workspacePath}`);
-				}
-			} else {
-				const reason = !classInfo ? 'No class info' : 
-							   (classInfo.role !== 'student' && classInfo.role !== 'teacher') ? 'Not a student or teacher' :
-							   !autoPushEnabled ? 'Auto-push disabled' : 'Unknown';
-				console.log('Auto-push skipped. Reason:', reason);
-			}
-		} catch (error: any) {
-			console.error('Auto-push error:', error);
-			// Don't show error again if already shown in inner catch
-			if (!error.message || !error.message.includes('Deadline')) {
-				vscode.window.showErrorMessage(`Auto-push failed: ${error.message}`);
-			}
-		}
-	});
-
-	context.subscriptions.push(saveListener);
-}
-
-async function restoreGitServiceState(context: vscode.ExtensionContext) {
-	try {
-		const token = context.globalState.get<string>('jwt_token');
-
-		if (token) {
-			apiService.setToken(token);
-		}
-
-		// Check if workspace exists
-		const workspaceFolders = vscode.workspace.workspaceFolders;
-		if (workspaceFolders && workspaceFolders.length > 0) {
-			const workspacePath = workspaceFolders[0].uri.fsPath;
-			
-			// Try to get class info from workspace folder name
-			// Format: CH1H3PT1-student-chiendeep1 or ClassName-ClassCode (teacher)
-			const folderName = workspacePath.split(/[\\/]/).pop() || '';
-			console.log('Workspace folder name:', folderName);
-			
-			// Check if this is a git repository
-			const git = simpleGit(workspacePath);
-			try {
-				await git.status();
-				
-				// Get current branch from git
-				const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
-				const currentGitBranch = currentBranch.trim();
-				console.log('Current git branch:', currentGitBranch);
-				
-				// Get remote URL
-				const remotes = await git.getRemotes(true);
-				const originRemote = remotes.find((r: any) => r.name === 'origin');
-				
-				if (originRemote && originRemote.refs.fetch) {
-					const repoUrl = originRemote.refs.fetch.replace(/\.git$/, '').replace(/^.*@github\.com[:\/]/, 'https://github.com/');
-					console.log('Repository URL:', repoUrl);
-
-					const folderParts = folderName.split('-');
-					let assignmentCode = folderParts[0] || '';
-					let role = 'student';
-					let branch = currentGitBranch;
-					let savedToken: string | undefined = token;
-
-					const currentClass = context.globalState.get<any>('current_class');
-					const isCurrentClassForThisWorkspace = !!(
-						currentClass?.assignmentCode &&
-						assignmentCode &&
-						String(currentClass.assignmentCode) === String(assignmentCode)
-					);
-					const savedInfo = isCurrentClassForThisWorkspace ? currentClass : null;
-
-					if (savedInfo?.assignmentCode) {
-						assignmentCode = savedInfo.assignmentCode;
-					}
-					if (savedInfo?.role) {
-						role = savedInfo.role;
-					}
-					if (savedInfo?.branch) {
-						branch = savedInfo.branch;
-					}
-
-					const expectedStudentBranchFromFolder =
-						assignmentCode && folderName.startsWith(`${assignmentCode}-student-`)
-							? folderName.substring(assignmentCode.length + 1)
-							: null;
-
-					if (!savedInfo?.branch) {
-						if (branch === 'main' || branch === 'master' || branch === 'teacher') {
-							role = 'teacher';
-							if (folderParts.length > 1) {
-								assignmentCode = folderParts[1];
-							}
-						} else {
-							role = 'student';
-						}
-					}
-
-					// Only fallback to folder-derived branch when no persisted branch exists.
-					if (!savedInfo?.branch && role === 'student' && expectedStudentBranchFromFolder) {
-						branch = expectedStudentBranchFromFolder;
-					}
-
-					savedToken = savedInfo?.token || token;
-					console.log('🎯 Final detected:', {
-						assignmentCode,
-						role,
-						branch,
-						branchSource: savedInfo?.branch ? 'current_class' : (expectedStudentBranchFromFolder ? 'workspace_folder' : 'git_current_branch')
-					});
-					console.log('[DEBUG] Final token for git service:', savedToken ? 'EXISTS (length: ' + savedToken.length + ')' : 'NULL');
-					
-					if (savedToken) {
-						console.log('[DEBUG] Initializing git service with token...');
-						
-						// ✅ IMPORTANT: Checkout to correct branch if different from current
-						if (branch !== currentGitBranch) {
-							console.log(`⚠️ Branch mismatch! Git: ${currentGitBranch}, Saved: ${branch}`);
-							console.log(`🔄 Checking out to correct branch: ${branch}`);
-							
-							try {
-								// Check if branch exists locally
-								const localBranches = await git.branchLocal();
-								const branchExists = localBranches.all.includes(branch);
-								
-								if (branchExists) {
-									await git.checkout(branch);
-									console.log(`✅ Checked out to existing local branch: ${branch}`);
-								} else {
-									// Check if remote branch exists
-									await git.fetch(['origin']);
-									const remoteBranches = await git.branch(['-r']);
-									const remoteBranchExists = remoteBranches.all.includes(`origin/${branch}`);
-									
-									if (remoteBranchExists) {
-										await git.checkout(branch);
-										console.log(`✅ Checked out to remote branch: ${branch}`);
-									} else {
-										console.error(`❌ Branch ${branch} not found locally or remotely!`);
-										vscode.window.showErrorMessage(`Không tìm thấy branch: ${branch}`);
-									}
-								}
-							} catch (checkoutError) {
-								console.error('Failed to checkout branch:', checkoutError);
-								vscode.window.showErrorMessage(`Lỗi chuyển branch: ${checkoutError}`);
-							}
-						} else {
-							console.log(`✅ Already on correct branch: ${branch}`);
-						}
-						
-						// Update globalState with current workspace info
-						const currentInfo = {
-							assignmentCode: assignmentCode,
-							repoUrl: repoUrl,
-							branch: branch,
-							token: savedToken,
-							role: role,
-							deadline: savedInfo?.deadline
-						};
-						
-						await context.globalState.update('current_class', currentInfo);
-						console.log('[DEBUG] Updated current_class in globalState');
-						
-						// Initialize git service with detected credentials
-						console.log('[DEBUG] Calling gitService.initializeWorkspace with:', {
-							workspacePath,
-							hasToken: !!savedToken,
-							repoUrl,
-							branch
-						});
-						await gitService.initializeWorkspace(workspacePath, {
-							token: savedToken,
-							repoUrl: repoUrl,
-							branch: branch
-						});
-						
-						// Set assignment info for deadline check (student only)
-						if (role === 'student' && assignmentCode) {
-							gitService.setClassInfo(apiService, assignmentCode);
-						}
-						
-						// Enable auto-push
-						gitService.enableAutoPush();
-						
-						console.log(`✅ Git service restored: role=${role}, branch=${branch}, assignmentCode=${assignmentCode}, token exists: ${!!savedToken}`);
-					} else {
-						console.warn('⚠️ No token found, auto-push disabled');
-						await gitService.initializeWorkspace(workspacePath);
-					}
-				}
-			} catch (gitError) {
-				console.log('Not a git repository or git error:', gitError);
-			}
-		}
-	} catch (error) {
-		console.error('Failed to restore git service state:', error);
-	}
-}
-
-/**
- * Check if git is installed
- */
-async function checkGitInstalled() {
-	const git = simpleGit();
-	try {
-		await git.version();
-		console.log('Git is installed');
-	} catch (error) {
-		vscode.window.showErrorMessage(
-			'⚠️ Git chưa được cài đặt! Extension cần Git để hoạt động.',
-			'Hướng dẫn cài đặt'
-		).then(selection => {
-			if (selection === 'Hướng dẫn cài đặt') {
-				vscode.env.openExternal(vscode.Uri.parse('https://git-scm.com/downloads'));
-			}
-		});
-	}
 }
 
 // This method is called when your extension is deactivated

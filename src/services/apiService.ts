@@ -132,16 +132,16 @@ export class ApiService {
                 const url = config.url || '';
                 const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
 
-                console.log(`🌐 [API ${method}] ${fullUrl}`);
+                console.log(`[API ${method}] ${fullUrl}`);
 
                 // Log payload if exists
                 if (config.data) {
-                    console.log(`📤 [Payload]`, config.data);
+                    console.log(`[Payload]`, config.data);
                 }
 
                 // Log query params if exists
                 if (config.params) {
-                    console.log(`📤 [Params]`, config.params);
+                    console.log(`[Params]`, config.params);
                 }
 
                 return config;
@@ -247,17 +247,6 @@ export class ApiService {
             return response.data;
         } catch (error: any) {
             throw new Error(`Failed to join assignment: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Update assignment local path after clone
-     */
-    async updateAssignmentLocalPath(assignmentCode: string, localPath: string): Promise<void> {
-        try {
-            await this.api.patch(`/assignment/${assignmentCode}/local-path`, { localPath });
-        } catch (error: any) {
-            throw new Error(`Failed to update local path: ${error.response?.data?.message || error.message}`);
         }
     }
 
@@ -506,10 +495,12 @@ export class ApiService {
     /**
      * Setup assignment workspace (Teacher only)
      */
-    async setupAssignmentWorkspace(assignmentCode: string): Promise<{ message: string, workspacePath: string }> {
+    async setupAssignmentWorkspace(assignmentCode: string, localPath?: string): Promise<{ message: string, workspacePath: string }> {
         try {
             console.log('[API] Setting up assignment workspace:', assignmentCode);
-            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/setup`);
+            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/setup`, {
+                localPath: localPath || null
+            });
             console.log('[API] Setup workspace response:', response.data);
             return response.data;
         } catch (error: any) {
@@ -518,10 +509,12 @@ export class ApiService {
         }
     }
 
-    async syncAssignmentWorkspace(assignmentCode: string): Promise<{ message: string }> {
+    async syncAssignmentWorkspace(assignmentCode: string, localPath?: string): Promise<{ message: string }> {
         try {
             console.log('[API] Syncing assignment workspace:', assignmentCode);
-            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/sync`);
+            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/sync`, {
+                localPath: localPath || null
+            });
             console.log('[API] Sync workspace response:', response.data);
             return response.data;
         } catch (error: any) {
@@ -540,39 +533,6 @@ export class ApiService {
         } catch (error: any) {
             console.error('[API] Get workspace path error:', error);
             throw new Error(`Failed to get workspace path: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Save teacher's local path for assignment
-     */
-    async saveTeacherLocalPath(assignmentCode: string, localPath: string): Promise<{ message: string, localPath: string, role: string }> {
-        try {
-            const response = await this.api.post(`/assignment/${assignmentCode}/teacher/localPath`, { localPath });
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Save teacher local path error:', error);
-            throw new Error(`Failed to save local path: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    async getTeacherLocalPath(assignmentCode: string): Promise<{ localPath: string, exists: boolean }> {
-        try {
-            const response = await this.api.get(`/assignment/${assignmentCode}/teacher/localPath`);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Get teacher local path error:', error);
-            throw new Error(`Failed to get local path: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    async getStudentLocalPath(assignmentCode: string): Promise<{ localPath: string, exists: boolean, branchName?: string }> {
-        try {
-            const response = await this.api.get(`/assignment/${assignmentCode}/student/localPath`);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Get student local path error:', error);
-            throw new Error(`Failed to get local path: ${error.response?.data?.error || error.message}`);
         }
     }
 
@@ -770,6 +730,10 @@ export class ApiService {
 
     async markNotificationAsRead(notificationId: number): Promise<void> {
         await this.api.patch(`/notifications/${notificationId}/read`, {});
+    }
+
+    async deleteNotification(notificationId: number): Promise<void> {
+        await this.api.delete(`/notifications/${notificationId}`);
     }
 
     async markAllNotificationsAsRead(): Promise<void> {

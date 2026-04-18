@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { StudentSubmissionDTO } from '../../services/apiService';
+import 'katex/dist/katex.min.css';
+
+const ReactMarkdown = require('react-markdown').default;
+const remarkGfm = require('remark-gfm').default;
+const remarkMath = require('remark-math').default;
+const rehypeKatex = require('rehype-katex').default;
 
 interface AssignmentDetailProps {
   vscode: any;
@@ -83,6 +89,46 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     });
   };
 
+  const markdownPreviewComponents = {
+    h1: ({ children }: { children?: React.ReactNode }) => (
+      <h1 className="mb-2 text-base font-bold tracking-tight text-[#111318]">{children}</h1>
+    ),
+    h2: ({ children }: { children?: React.ReactNode }) => (
+      <h2 className="mb-2 mt-3 text-[15px] font-bold text-[#111318]">{children}</h2>
+    ),
+    h3: ({ children }: { children?: React.ReactNode }) => (
+      <h3 className="mb-1.5 mt-2.5 text-sm font-semibold text-[#111318]">{children}</h3>
+    ),
+    p: ({ children }: { children?: React.ReactNode }) => (
+      <p className="mb-2.5 text-[13px] leading-6 text-gray-700">{children}</p>
+    ),
+    ul: ({ children }: { children?: React.ReactNode }) => (
+      <ul className="mb-2.5 ml-5 list-disc space-y-1 text-[13px] text-gray-700">{children}</ul>
+    ),
+    ol: ({ children }: { children?: React.ReactNode }) => (
+      <ol className="mb-2.5 ml-5 list-decimal space-y-1 text-[13px] text-gray-700">{children}</ol>
+    ),
+    li: ({ children }: { children?: React.ReactNode }) => <li className="leading-7">{children}</li>,
+    strong: ({ children }: { children?: React.ReactNode }) => (
+      <strong className="font-bold text-[#111318]">{children}</strong>
+    ),
+    code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => {
+      if (inline) {
+        return (
+          <code className="rounded bg-[#ecedfa] px-1.5 py-0.5 font-mono text-[0.9em] text-[#135bec]">
+            {children}
+          </code>
+        );
+      }
+
+      return (
+        <pre className="mb-3 overflow-x-auto rounded-lg bg-[#191b24] p-4 text-sm text-white">
+          <code>{children}</code>
+        </pre>
+      );
+    }
+  };
+
   return (
     <div className="bg-white text-gray-900 min-h-screen flex justify-center">
       <div className="w-full max-w-[420px] bg-white flex flex-col min-h-screen border-x border-gray-200">
@@ -115,7 +161,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                 className="bg-[#135bec] text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-800 transition-colors"
               >
                 <span>💻</span>
-                Workspace
+                Đồng bộ & mở
               </button>
             </div>
 
@@ -131,10 +177,16 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
               {assignment.title}
             </h2>
 
-            {/* Description (without label) */}
-            <p className="text-sm text-gray-700 leading-relaxed mb-3">
-              {assignment.description || 'Không có mô tả'}
-            </p>
+            {/* Description (render markdown) */}
+            <div className="text-sm leading-relaxed mb-3 markdown-preview">
+              {assignment.description?.trim() ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
+                  {assignment.description}
+                </ReactMarkdown>
+              ) : (
+                <p className="text-gray-700">Không có mô tả</p>
+              )}
+            </div>
 
             {/* Deadline */}
             <div className="flex items-center gap-2 text-sm text-gray-600">

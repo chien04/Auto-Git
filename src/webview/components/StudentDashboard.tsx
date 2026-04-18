@@ -23,6 +23,31 @@ interface ClassItem {
   assignmentCount?: number;
 }
 
+interface NotificationActionItem {
+  id: number;
+  rawType: string;
+  assignmentCode?: string;
+  classCode?: string;
+  studentFilePath?: string;
+}
+
+interface AssignmentItem {
+  assignmentId: string;
+  assignmentCode: string;
+  title: string;
+  description: string;
+  repoUrl: string;
+  deadline: string;
+  studentCount: number;
+  createdAt: string;
+  joined?: boolean;
+  commitCount?: number;
+  lastCommitAt?: string;
+  localPath?: string;
+  className?: string;
+  classCode?: string;
+}
+
 const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiService }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [showJoinForm, setShowJoinForm] = useState(false);
@@ -31,6 +56,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   const [currentAssignmentCode, setCurrentAssignmentCode] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'notification' | 'settings'>('dashboard');
   const [isViewingAssignmentDetail, setIsViewingAssignmentDetail] = useState(false);
+  const [notificationTargetAssignmentCode, setNotificationTargetAssignmentCode] = useState<string | undefined>(undefined);
+  const [notificationTargetAssignmentData, setNotificationTargetAssignmentData] = useState<AssignmentItem | undefined>(undefined);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatConfig, setChatConfig] = useState<{
     otherUserId?: number;
@@ -61,6 +88,45 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   }) => {
     setChatConfig(config);
     setChatOpen(true);
+  };
+
+  const handleNotificationAction = async (notification: NotificationActionItem) => {
+    if (notification.rawType === 'GRADED' && notification.assignmentCode && notification.classCode) {
+      const targetClass = classes.find((c) => c.classCode === notification.classCode);
+      if (!targetClass) {
+        return;
+      }
+
+      let preloadedAssignment: AssignmentItem | undefined;
+      try {
+        const assignments = await apiService.getAssignments(notification.classCode);
+        const found = (assignments || []).find((a: AssignmentItem) => a.assignmentCode === notification.assignmentCode);
+        if (found) {
+          preloadedAssignment = {
+            ...found,
+            className: targetClass.className,
+            classCode: targetClass.classCode
+          };
+        }
+      } catch (error) {
+        // Fallback to lazy open by assignment code below.
+      }
+
+      setActiveTab('dashboard');
+      setSelectedClass(targetClass);
+      setViewAssignments(true);
+      setNotificationTargetAssignmentData(preloadedAssignment);
+      setNotificationTargetAssignmentCode(notification.assignmentCode);
+      return;
+    }
+
+    if (notification.rawType === 'COMMENT' && notification.assignmentCode && notification.studentFilePath) {
+      vscode.postMessage({
+        type: 'openCommentedFileFromNotification',
+        assignmentCode: notification.assignmentCode,
+        studentFilePath: notification.studentFilePath
+      });
+    }
   };
 
   useEffect(() => {
@@ -189,6 +255,12 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
               className={selectedClass.className}
               isTeacher={false}
               currentAssignmentCode={currentAssignmentCode}
+              initialAssignmentCode={notificationTargetAssignmentCode}
+              initialAssignmentData={notificationTargetAssignmentData}
+              onInitialAssignmentHandled={() => {
+                setNotificationTargetAssignmentCode(undefined);
+                setNotificationTargetAssignmentData(undefined);
+              }}
               onViewChange={(isDetailView) => setIsViewingAssignmentDetail(isDetailView)}
             />
           </div>
@@ -265,7 +337,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             />
           )
         ) : activeTab === 'notification' ? (
-          <NotificationView vscode={vscode} />
+          <NotificationView vscode={vscode} onNotificationAction={handleNotificationAction} />
         ) : (
           <>
             {/* Page Heading */}

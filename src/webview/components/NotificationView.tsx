@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 interface NotificationViewProps {
   vscode: any;
+  onNotificationAction?: (notification: NotificationItem) => void;
 }
 
 interface NotificationItem {
   id: number;
+  rawType: string;
   title: string;
   subtitle?: string;
   time: string;
@@ -14,6 +16,10 @@ interface NotificationItem {
   preview?: string;
   unread?: boolean;
   initials: string;
+  assignmentCode?: string;
+  classCode?: string;
+  targetBranch?: string;
+  studentFilePath?: string;
 }
 
 interface IncomingNotification {
@@ -24,6 +30,10 @@ interface IncomingNotification {
   createdAt?: string;
   isRead?: boolean;
   score?: number;
+  assignmentCode?: string;
+  classCode?: string;
+  targetBranch?: string;
+  studentFilePath?: string;
 }
 
 const getInitials = (text: string) => {
@@ -59,6 +69,7 @@ const mapIncomingToItem = (incoming: IncomingNotification): NotificationItem => 
   if (type === 'SUBMIT') {
     return {
       id: incoming.id || Date.now(),
+      rawType: type,
       title: title || 'Bài nộp mới',
       subtitle: 'Thông báo cho giáo viên',
       preview: message,
@@ -66,13 +77,18 @@ const mapIncomingToItem = (incoming: IncomingNotification): NotificationItem => 
       type: 'student',
       roleLabel: 'Student',
       unread: !isRead,
-      initials: 'SV'
+      initials: 'SV',
+      assignmentCode: incoming.assignmentCode,
+      classCode: incoming.classCode,
+      targetBranch: incoming.targetBranch,
+      studentFilePath: incoming.studentFilePath
     };
   }
 
   if (type === 'GRADED') {
     return {
       id: incoming.id || Date.now(),
+      rawType: type,
       title: title || 'Đã chấm điểm',
       subtitle: 'Thông báo cho sinh viên',
       preview: message,
@@ -80,22 +96,50 @@ const mapIncomingToItem = (incoming: IncomingNotification): NotificationItem => 
       type: 'instructor',
       roleLabel: 'Instructor',
       unread: !isRead,
-      initials: 'GV'
+      initials: 'GV',
+      assignmentCode: incoming.assignmentCode,
+      classCode: incoming.classCode,
+      targetBranch: incoming.targetBranch,
+      studentFilePath: incoming.studentFilePath
+    };
+  }
+
+  if (type === 'COMMENT') {
+    return {
+      id: incoming.id || Date.now(),
+      rawType: type,
+      title: title || 'Nhận xét mới từ giáo viên',
+      subtitle: 'Thông báo cho sinh viên',
+      preview: message,
+      time: formatTime(createdAt),
+      type: 'instructor',
+      roleLabel: 'Instructor',
+      unread: !isRead,
+      initials: 'GV',
+      assignmentCode: incoming.assignmentCode,
+      classCode: incoming.classCode,
+      targetBranch: incoming.targetBranch,
+      studentFilePath: incoming.studentFilePath
     };
   }
 
   return {
     id: incoming.id || Date.now(),
+    rawType: type,
     title: title || 'Thông báo mới',
     preview: message,
     time: formatTime(createdAt),
     type: 'class',
     unread: !isRead,
-    initials: getInitials('TB')
+    initials: getInitials('TB'),
+    assignmentCode: incoming.assignmentCode,
+    classCode: incoming.classCode,
+    targetBranch: incoming.targetBranch,
+    studentFilePath: incoming.studentFilePath
   };
 };
 
-const NotificationView: React.FC<NotificationViewProps> = ({ vscode }) => {
+const NotificationView: React.FC<NotificationViewProps> = ({ vscode, onNotificationAction }) => {
   const [search, setSearch] = useState('');
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
@@ -116,6 +160,8 @@ const NotificationView: React.FC<NotificationViewProps> = ({ vscode }) => {
         ));
       } else if (data?.type === 'allNotificationsMarkedAsRead') {
         setNotifications(prev => prev.map(item => ({ ...item, unread: false })));
+      } else if (data?.type === 'notificationDeleted' && data.notificationId) {
+        setNotifications(prev => prev.filter(item => item.id !== data.notificationId));
       }
     };
 
@@ -167,11 +213,21 @@ const NotificationView: React.FC<NotificationViewProps> = ({ vscode }) => {
           filteredNotifications.map((item) => (
             <div
               key={item.id}
-              className="flex items-start gap-3 px-4 py-4 hover:bg-[#f8fafc] cursor-pointer border-b border-[#f1f5f9]"
+              className="group flex items-start gap-3 px-4 py-4 hover:bg-[#f8fafc] cursor-pointer border-b border-[#f1f5f9]"
               onClick={() => {
                 if (item.unread) {
                   vscode.postMessage({ type: 'markNotificationAsRead', notificationId: item.id });
                 }
+
+                if (!onNotificationAction && item.rawType === 'COMMENT' && item.assignmentCode && item.studentFilePath) {
+                  vscode.postMessage({
+                    type: 'openCommentedFileFromNotification',
+                    assignmentCode: item.assignmentCode,
+                    studentFilePath: item.studentFilePath
+                  });
+                }
+
+                onNotificationAction?.(item);
               }}
             >
               <div className="relative shrink-0">
@@ -202,6 +258,19 @@ const NotificationView: React.FC<NotificationViewProps> = ({ vscode }) => {
                 {item.subtitle && <p className="text-[12px] text-[#616f89] truncate">{item.subtitle}</p>}
                 {item.preview && <p className="text-[12px] text-[#616f89] truncate">{item.preview}</p>}
               </div>
+
+              <button
+                className="ml-1 mt-1 p-1.5 rounded text-[#c0c7d4] hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Xóa thông báo"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  vscode.postMessage({ type: 'deleteNotification', notificationId: item.id });
+                }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
 
               {item.unread && <span className="mt-2 w-2 h-2 bg-[#111318] rounded-full"></span>}
             </div>

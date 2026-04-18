@@ -7,6 +7,9 @@ interface AssignmentListProps {
   classCode: string;
   isTeacher: boolean;
   currentAssignmentCode?: string; // Assignment code of currently opened workspace
+  initialAssignmentCode?: string;
+  initialAssignmentData?: Assignment;
+  onInitialAssignmentHandled?: () => void;
   onViewChange?: (isDetailView: boolean) => void; // Notify parent when view changes
   className?: string;
 }
@@ -28,15 +31,58 @@ interface Assignment {
   classCode?: string;
 }
 
-const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, classCode, isTeacher, currentAssignmentCode, onViewChange, className }) => {
+const AssignmentList: React.FC<AssignmentListProps> = ({
+  vscode,
+  apiService,
+  classCode,
+  isTeacher,
+  currentAssignmentCode,
+  initialAssignmentCode,
+  initialAssignmentData,
+  onInitialAssignmentHandled,
+  onViewChange,
+  className
+}) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeAssignmentCode, setActiveAssignmentCode] = useState<string | undefined>(currentAssignmentCode);
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(initialAssignmentData || null);
 
   useEffect(() => {
     setActiveAssignmentCode(currentAssignmentCode);
   }, [currentAssignmentCode]);
+
+  useEffect(() => {
+    if (initialAssignmentData) {
+      setSelectedAssignment(initialAssignmentData);
+      onInitialAssignmentHandled?.();
+    }
+  }, [initialAssignmentData, onInitialAssignmentHandled]);
+
+  useEffect(() => {
+    if (!initialAssignmentCode || selectedAssignment) {
+      return;
+    }
+
+    const found = assignments.find((a) => a.assignmentCode === initialAssignmentCode);
+    if (!found) {
+      return;
+    }
+
+    setSelectedAssignment(found);
+    onInitialAssignmentHandled?.();
+  }, [initialAssignmentCode, assignments, selectedAssignment, onInitialAssignmentHandled]);
+
+  useEffect(() => {
+    if (!initialAssignmentCode || loading || selectedAssignment) {
+      return;
+    }
+
+    const found = assignments.find((a) => a.assignmentCode === initialAssignmentCode);
+    if (!found) {
+      onInitialAssignmentHandled?.();
+    }
+  }, [initialAssignmentCode, loading, selectedAssignment, assignments, onInitialAssignmentHandled]);
 
   // Notify parent when view changes
   useEffect(() => {
@@ -92,12 +138,10 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
   };
 
   const handleViewAssignmentFolder = (assignment: Assignment) => {
-    if (assignment.localPath) {
-      vscode.postMessage({ 
-        type: 'openAssignmentFolder', 
-        localPath: assignment.localPath 
-      });
-    }
+    vscode.postMessage({ 
+      type: 'openAssignmentFolder', 
+      assignmentCode: assignment.assignmentCode 
+    });
   };
 
   const handleViewAssignment = (assignment: Assignment) => {
@@ -245,13 +289,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
                   </h3>
                 </div>
 
-                {/* Description */}
-                {assignment.description && (
-                  <p className="text-[#616f89] text-sm leading-relaxed">
-                    {assignment.description}
-                  </p>
-                )}
-
                 {/* Info Section */}
                 <div className="flex flex-col gap-1.5 mt-2">
                   {/* Deadline */}
@@ -288,30 +325,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({ vscode, apiService, cla
                     </>
                   )}
                   
-                  {/* Teacher Workspace Controls */}
-                  {isTeacher && (
-                    <div className="flex gap-2 mt-2 pt-2 border-t border-[#dbdfe6]">
-                      <button
-                        onClick={(e) => handleSyncWorkspace(assignment, e)}
-                        disabled={!!(activeAssignmentCode && activeAssignmentCode !== assignment.assignmentCode)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity ${
-                          activeAssignmentCode && activeAssignmentCode !== assignment.assignmentCode
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
-                            : 'bg-[#135bec] text-white hover:opacity-90'
-                        }`}
-                        title={
-                          activeAssignmentCode && activeAssignmentCode !== assignment.assignmentCode
-                            ? 'Chỉ sync được bài tập đang mở'
-                            : 'Đồng bộ code mới nhất từ tất cả sinh viên'
-                        }
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Sync Code
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
