@@ -45,65 +45,22 @@ export const TeacherStatsCard: React.FC<TeacherStatsCardProps> = ({ vscode, apiS
     };
 
     if (loading) {
-        return <div style={styles.loading}>Đang tải thống kê...</div>;
+        return <div className="p-5 text-center text-[13px] text-[#8e8e8e]">Đang tải thống kê...</div>;
     }
 
     const totalClasses = classes.length;
     const activeClasses = classes.filter(c => c.isActive).length;
 
     return (
-        <div style={styles.container}>
-            <h3 style={styles.title}>Tổng quan</h3>
+        <div className="mb-6 rounded-xl border border-[#dbdbdb] bg-white p-5">
+            <h3 className="mb-4 text-lg font-bold text-[#262626]">Tổng quan</h3>
             
-            <div style={styles.statsGrid}>
-                <div style={styles.statBox}>
-                    <div style={styles.statLabel}>Tổng số lớp</div>
-                    <div style={styles.statValue}>{totalClasses}</div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-lg bg-[#fafafa] p-4 text-center">
+                    <div className="mb-2 text-xs text-[#8e8e8e]">Tổng số lớp</div>
+                    <div className="text-2xl font-bold text-[#262626]">{totalClasses}</div>
                 </div>
             </div>
         </div>
     );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-    container: {
-        marginBottom: '24px',
-        backgroundColor: '#fff',
-        border: '1px solid #dbdbdb',
-        borderRadius: '12px',
-        padding: '20px',
-    },
-    title: {
-        fontSize: '18px',
-        fontWeight: 'bold',
-        marginBottom: '16px',
-        color: '#262626',
-    },
-    statsGrid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '16px',
-    },
-    statBox: {
-        textAlign: 'center',
-        padding: '16px',
-        backgroundColor: '#fafafa',
-        borderRadius: '8px',
-    },
-    statLabel: {
-        fontSize: '12px',
-        color: '#8e8e8e',
-        marginBottom: '8px',
-    },
-    statValue: {
-        fontSize: '24px',
-        fontWeight: 'bold',
-        color: '#262626',
-    },
-    loading: {
-        padding: '20px',
-        textAlign: 'center',
-        color: '#8e8e8e',
-        fontSize: '13px',
-    },
 };

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash } from 'crypto';
 import * as vscode from 'vscode';
-import { ApiService } from '../../services/apiService';
+import { ApiService, WorkspaceUploadRequest, VectorFileDTO, VectorStudentAssignmentDTO } from '../../services/apiService';
 import { GitService } from '../../services/gitService';
 import {
     ensureBaseDirectory,
@@ -267,6 +268,7 @@ export async function handleOpenAssignment(
 
         if (userRole === 'TEACHER') {
             await handleSyncTeacherWorkspaceBestEffort(deps, assignmentCode, userData);
+            await triggerVectorDbUploadInBackground(deps, assignmentCode, userData);
             await handleOpenTeacherAssignment(deps, assignmentCode);
         } else {
             await handleOpenStudentAssignment(deps, assignmentCode);
@@ -676,6 +678,116 @@ export async function handleSyncTeacherWorkspaceBestEffort(
         console.warn('[DEBUG] Teacher auto-sync failed before open:', error?.message || error);
         vscode.window.showWarningMessage(`Không thể đồng bộ trước khi mở: ${error?.message || 'Unknown error'}`);
     }
+}
+
+async function triggerVectorDbUploadInBackground(
+    deps: AssignmentHandlerDeps,
+    assignmentCode: string,
+    userData: any
+): Promise<void> {
+    try {
+        if (!userData?.userId) {
+            return;
+        }
+
+        const baseDirectory = await ensureBaseDirectory(deps.context, userData.userId);
+        if (!baseDirectory) {
+            return;
+        }
+
+        const roomData = getRoomData(baseDirectory, userData.userId, assignmentCode);
+        if (!roomData.found || !roomData.fullPath) {
+            return;
+        }
+
+        const payload = buildWorkspaceUploadPayload(assignmentCode, roomData.fullPath);
+        if (payload.studentAssignments.length === 0) {
+            return;
+        }
+
+        deps.apiService.uploadVectorDb(payload)
+            .then(() => {
+                console.log(`[AI] upload-vector-db accepted for assignment ${assignmentCode}`);
+            })
+            .catch((error: any) => {
+                console.warn('[AI] upload-vector-db failed:', error?.message || error);
+            });
+    } catch (error: any) {
+        console.warn('[AI] Failed to schedule upload-vector-db:', error?.message || error);
+    }
+}
+
+function buildWorkspaceUploadPayload(assignmentCode: string, localPath: string): WorkspaceUploadRequest {
+    const studentsRoot = path.join(localPath, 'students');
+    if (!fs.existsSync(studentsRoot)) {
+        return {
+            assignmentCode,
+            studentAssignments: []
+        };
+    }
+
+    const studentFolders = fs.readdirSync(studentsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+
+    const studentAssignments: VectorStudentAssignmentDTO[] = [];
+    for (const studentName of studentFolders) {
+        const studentPath = path.join(studentsRoot, studentName);
+        const files = collectAllowedFiles(studentPath);
+        studentAssignments.push({
+            studentName,
+            files
+        });
+    }
+
+    return {
+        assignmentCode,
+        studentAssignments
+    };
+}
+
+function collectAllowedFiles(rootDir: string): VectorFileDTO[] {
+    const collected: VectorFileDTO[] = [];
+    const excludedExtensions = new Set(['.md', '.yml']);
+    const excludedNames = new Set(['.git', '.github']);
+
+    const walk = (currentPath: string) => {
+        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+        for (const entry of entries) {
+            if (excludedNames.has(entry.name)) {
+                continue;
+            }
+
+            const absolute = path.join(currentPath, entry.name);
+
+            if (entry.isDirectory()) {
+                walk(absolute);
+                continue;
+            }
+
+            const ext = path.extname(entry.name).toLowerCase();
+            if (excludedExtensions.has(ext)) {
+                continue;
+            }
+
+            try {
+                const fileBuffer = fs.readFileSync(absolute);
+                const fileContent = fileBuffer.toString('utf8');
+                const hashcode = createHash('sha256').update(fileBuffer).digest('hex');
+                const relativePath = path.relative(rootDir, absolute).replace(/\\/g, '/');
+                collected.push({
+                    fileName: relativePath,
+                    fileContent,
+                    hashcode
+                });
+            } catch {
+                // Skip unreadable/binary files quietly.
+            }
+        }
+    };
+
+    walk(rootDir);
+    return collected;
 }
 
 export async function handleDeleteAssignment(

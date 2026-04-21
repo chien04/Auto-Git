@@ -318,6 +318,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
           chatOpen && chatConfig ? (
             <ChatWindow
               vscode={vscode}
+              apiService={apiService}
               currentUserId={parseInt(user.userId)}
               currentUserName={user.name}
               otherUserId={chatConfig.otherUserId}

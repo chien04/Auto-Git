@@ -46,10 +46,10 @@ export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService, vscode
         vscode.postMessage({ type: 'getStudentActivity' });
     };
 
-    const getColorForCount = (count: number): string => {
-        if (count === 0) return '#ebedf0'; // ⬜
-        if (count === 1) return '#40c463'; // 🟩
-        return '#40c463'; // Always green if submitted
+    const getCellClass = (count: number): string => {
+        if (count === -1) return 'border-none bg-transparent';
+        if (count === 0) return 'border border-[#e1e4e8] bg-[#ebedf0]';
+        return 'border border-[#e1e4e8] bg-[#40c463]';
     };
 
     const getWeeks = () => {
@@ -90,7 +90,7 @@ export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService, vscode
     };
 
     if (loading) {
-        return <div style={styles.loading}>Đang tải hoạt động...</div>;
+        return <div className="p-5 text-center text-[13px] text-[#8e8e8e]">Đang tải hoạt động...</div>;
     }
 
     if (data.length === 0) {
@@ -100,37 +100,34 @@ export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService, vscode
     const weeks = getWeeks();
 
     return (
-        <div style={styles.container}>
-            <h3 style={styles.title}>Hoạt động nộp bài</h3>
+        <div className="mb-6 rounded-xl border border-[#dbdbdb] bg-white p-5">
+            <h3 className="mb-4 text-lg font-bold text-[#262626]">Hoạt động nộp bài</h3>
             
-            <div style={styles.heatmapContainer}>
-                <div style={styles.weekLabels}>
+            <div className="flex gap-2">
+                <div className="flex flex-col gap-1 pt-6">
                     {weeks.map((_, index) => (
-                        <div key={index} style={styles.weekLabel}>W{index + 1}</div>
+                        <div key={index} className="flex h-[14px] items-center text-[11px] text-[#8e8e8e]">W{index + 1}</div>
                     ))}
                 </div>
                 
                 <div>
-                    <div style={styles.dayLabels}>
-                        <span style={styles.dayLabel}>Mon</span>
-                        <span style={styles.dayLabel}>Tue</span>
-                        <span style={styles.dayLabel}>Wed</span>
-                        <span style={styles.dayLabel}>Thu</span>
-                        <span style={styles.dayLabel}>Fri</span>
-                        <span style={styles.dayLabel}>Sat</span>
-                        <span style={styles.dayLabel}>Sun</span>
+                    <div className="mb-1 flex gap-1">
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Mon</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Tue</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Wed</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Thu</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Fri</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Sat</span>
+                        <span className="w-4 text-center text-[11px] text-[#8e8e8e]">Sun</span>
                     </div>
 
-                    <div style={styles.grid}>
+                    <div className="flex flex-col gap-1">
                         {weeks.map((week, weekIndex) => (
-                            <div key={weekIndex} style={styles.week}>
+                            <div key={weekIndex} className="flex gap-1">
                                 {week.map((day, dayIndex) => (
                                     <div
                                         key={dayIndex}
-                                        style={{
-                                            ...styles.day,
-                                            backgroundColor: day.count === -1 ? 'transparent' : getColorForCount(day.count),
-                                        }}
+                                        className={`h-4 w-4 rounded-[2px] ${getCellClass(day.count)}`}
                                         title={day.date ? `${day.date}: ${day.count === 1 ? 'Đã nộp' : 'Chưa nộp'}` : ''}
                                     />
                                 ))}
@@ -140,99 +137,12 @@ export const CommitHeatmap: React.FC<CommitHeatmapProps> = ({ apiService, vscode
                 </div>
             </div>
 
-            <div style={styles.legend}>
-                <div style={{ ...styles.legendBox, backgroundColor: '#ebedf0' }} />
-                <span style={styles.legendLabel}>Chưa nộp</span>
-                <div style={{ ...styles.legendBox, backgroundColor: '#40c463' }} />
-                <span style={styles.legendLabel}>Đã nộp</span>
+            <div className="mt-4 flex items-center gap-1 text-xs text-[#8e8e8e]">
+                <div className="h-3 w-3 rounded-[2px] border border-[#e1e4e8] bg-[#ebedf0]" />
+                <span className="text-[11px]">Chưa nộp</span>
+                <div className="h-3 w-3 rounded-[2px] border border-[#e1e4e8] bg-[#40c463]" />
+                <span className="text-[11px]">Đã nộp</span>
             </div>
         </div>
     );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-    container: {
-        marginBottom: '24px',
-        backgroundColor: '#fff',
-        border: '1px solid #dbdbdb',
-        borderRadius: '12px',
-        padding: '20px',
-    },
-    title: {
-        fontSize: '18px',
-        fontWeight: 'bold',
-        marginBottom: '16px',
-        color: '#262626',
-    },
-    heatmapContainer: {
-        display: 'flex',
-        gap: '8px',
-    },
-    weekLabels: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        paddingTop: '24px',
-    },
-    weekLabel: {
-        fontSize: '11px',
-        color: '#8e8e8e',
-        height: '14px',
-        display: 'flex',
-        alignItems: 'center',
-    },
-    dayLabels: {
-        display: 'flex',
-        gap: '4px',
-        marginBottom: '4px',
-    },
-    dayLabel: {
-        fontSize: '11px',
-        color: '#8e8e8e',
-        width: '16px',
-        textAlign: 'center',
-    },
-    grid: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-    },
-    week: {
-        display: 'flex',
-        gap: '4px',
-    },
-    day: {
-        width: '16px',
-        height: '16px',
-        borderRadius: '2px',
-        border: '1px solid #e1e4e8',
-    },
-    legend: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        marginTop: '16px',
-        fontSize: '12px',
-        color: '#8e8e8e',
-    },
-    legendLabel: {
-        fontSize: '11px',
-    },
-    legendBox: {
-        width: '12px',
-        height: '12px',
-        borderRadius: '2px',
-        border: '1px solid #e1e4e8',
-    },
-    legendText: {
-        fontSize: '11px',
-        color: '#8e8e8e',
-        marginTop: '8px',
-    },
-    loading: {
-        padding: '20px',
-        textAlign: 'center',
-        color: '#8e8e8e',
-        fontSize: '13px',
-    },
 };

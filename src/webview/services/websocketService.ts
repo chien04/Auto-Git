@@ -359,6 +359,33 @@ export class WebSocketService {
       }
     };
   }
+
+  /**
+   * Subscribe to AI streaming response chunks
+   */
+  subscribeToAiStream(callback: (chunk: string) => void): (() => void) | undefined {
+    if (!this.client || !this.connected) {
+      console.error('[WebSocketService] Cannot subscribe AI stream - WebSocket not connected');
+      return undefined;
+    }
+
+    const destination = `/user/queue/ai-stream`;
+
+    if (this.subscriptions.has(destination)) {
+      this.subscriptions.get(destination)?.unsubscribe();
+    }
+
+    const subscription = this.client.subscribe(destination, (message: IMessage) => {
+      callback(message.body || '');
+    });
+
+    this.subscriptions.set(destination, subscription);
+
+    return () => {
+      subscription.unsubscribe();
+      this.subscriptions.delete(destination);
+    };
+  }
   
   /**
    * Unsubscribe from a destination

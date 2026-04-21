@@ -107,35 +107,35 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
 
   if (selectedStudent) {
     return (
-      <div style={styles.container}>
-        <button onClick={() => setSelectedStudent(null)} style={styles.backButton}>
+      <div className="min-h-screen bg-[#fafafa] p-6">
+        <button onClick={() => setSelectedStudent(null)} className="mb-4 border-none bg-transparent p-2 text-2xl text-[#262626] outline-none transition-colors">
           ←
         </button>
         
-        <div style={styles.header}>
+        <div className="mb-6">
           <div>
-            <h2 style={styles.title}>Lịch sử commit - {selectedStudent.studentName}</h2>
-            <p style={styles.subtitle}>Branch: {selectedStudent.branchName}</p>
+            <h2 className="mb-2 text-[28px] font-bold tracking-[-0.5px] text-black">Lịch sử commit - {selectedStudent.studentName}</h2>
+            <p className="text-sm text-[#8e8e8e]">Branch: {selectedStudent.branchName}</p>
           </div>
         </div>
 
         {commits.length === 0 ? (
-          <div style={styles.empty}>
-            <p style={styles.emptyText}>Chưa có commit nào</p>
+          <div className="rounded-2xl border border-[#dbdbdb] bg-white px-5 py-[60px] text-center">
+            <p className="text-base text-[#8e8e8e]">Chưa có commit nào</p>
           </div>
         ) : (
-          <div style={styles.commitList}>
+          <div className="flex flex-col gap-3">
             {commits
               .filter(commit => !commit.message.toLowerCase().includes('initial commit'))
               .map((commit) => (
-              <div key={commit.sha} style={styles.commitCard}>
-                <div style={styles.commitHeader}>
-                  <span style={styles.commitDate}>
+              <div key={commit.sha} className="rounded-xl border border-[#dbdbdb] bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+                <div className="mb-2 flex items-start justify-between">
+                  <span>
                     {new Date(commit.date).toLocaleString('vi-VN')}
                   </span>
                   <button
                     onClick={() => handleViewCode(commit.sha)}
-                    style={styles.viewButton}
+                    className="cursor-pointer rounded-lg border-none bg-[#0095f6] px-4 py-1.5 text-[13px] font-semibold text-white outline-none transition-all"
                   >
                     Xem code
                   </button>
@@ -149,15 +149,15 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
   }
 
   return (
-    <div style={styles.container}>
-      <button onClick={onBack} style={styles.backButton}>
+    <div className="min-h-screen bg-[#fafafa] p-6">
+      <button onClick={onBack} className="mb-4 border-none bg-transparent p-2 text-2xl text-[#262626] outline-none transition-colors">
         ←
       </button>
       
-      <div style={styles.header}>
+      <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h2 style={styles.title}>{classItem.className}</h2>
-          <p style={styles.subtitle}>Mã lớp: {classItem.classCode}</p>
+          <h2 className="mb-2 text-[28px] font-bold tracking-[-0.5px] text-black">{classItem.className}</h2>
+          <p className="text-sm text-[#8e8e8e]">Mã lớp: {classItem.classCode}</p>
         </div>
         <button
           onClick={() => {
@@ -170,55 +170,47 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
               }
             });
           }}
-          style={styles.chatGroupButton}
+          className="whitespace-nowrap rounded-xl border-none bg-[#0095f6] px-6 py-3 text-sm font-semibold text-white outline-none transition-all"
         >
           💬 Chat nhóm
         </button>
       </div>
 
       {students.length === 0 ? (
-        <div style={styles.empty}>
-          <p style={styles.emptyText}>Chưa có sinh viên nào trong lớp</p>
+        <div className="rounded-2xl border border-[#dbdbdb] bg-white px-5 py-[60px] text-center">
+          <p className="text-base text-[#8e8e8e]">Chưa có sinh viên nào trong lớp</p>
         </div>
       ) : (
-        <div style={styles.studentGrid}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
           {students.map((student) => {
             const isCurrent = isCurrentUser(student);
             const isClickable = userRole === 'TEACHER' || isCurrent;
             return (
             <div 
               key={student.studentId} 
-              style={{
-                ...styles.studentCard,
-                ...(isCurrent ? styles.currentUserCard : {}),
-                cursor: isClickable ? 'pointer' : 'default',
-                opacity: (userRole === 'STUDENT' && !isCurrent) ? 0.6 : 1,
-              }}
+              className={`rounded-xl border-2 p-4 shadow-[0_1px_3px_rgba(0,0,0,0.08)] transition-all ease-in-out ${isCurrent ? 'border-[#0095f6] bg-[#f0f8ff] shadow-[0_2px_8px_rgba(0,149,246,0.15)]' : 'border-[#dbdbdb] bg-white'} ${isClickable ? 'cursor-pointer' : 'cursor-default'} ${(userRole === 'STUDENT' && !isCurrent) ? 'opacity-60' : 'opacity-100'}`}
               onClick={() => handleViewCommits(student)}
             >
-              <h3 style={{
-                ...styles.studentName,
-                ...(isCurrent ? styles.currentUserName : {})
-              }}>
+              <h3 className={`mb-2 flex flex-wrap items-center gap-1.5 text-base font-semibold ${isCurrent ? 'text-[#0095f6] font-bold' : 'text-[#262626]'}`}>
                 {student.studentName}
               </h3>
               {userRole === 'TEACHER' && (
                 <>
-                  <div style={styles.studentInfo}>
-                    <p style={styles.infoItem}>
-                      <span style={styles.label}>Branch:</span> {student.branchName}
+                  <div className="text-[13px]">
+                    <p className="my-1.5 text-[#262626]">
+                      <span className="font-medium text-[#8e8e8e]">Branch:</span> {student.branchName}
                     </p>
-                    <p style={styles.infoItem}>
-                      <span style={styles.label}>Commits:</span> {student.commitCount}
+                    <p className="my-1.5 text-[#262626]">
+                      <span className="font-medium text-[#8e8e8e]">Commits:</span> {student.commitCount}
                     </p>
                     {student.lastCommitAt && (
-                      <p style={styles.infoItem}>
-                        <span style={styles.label}>Commit cuối:</span>{' '}
+                      <p className="my-1.5 text-[#262626]">
+                        <span className="font-medium text-[#8e8e8e]">Commit cuối:</span>{' '}
                         {new Date(student.lastCommitAt).toLocaleDateString('vi-VN')}
                       </p>
                     )}
                   </div>
-                  <div style={styles.buttonGroup}>
+                  <div className="mt-3 flex gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -231,7 +223,7 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                           }
                         });
                       }}
-                      style={styles.chatButton}
+                      className="flex-1 cursor-pointer rounded-[10px] border-none bg-[#0095f6] p-2.5 text-[13px] font-semibold text-white outline-none transition-all"
                     >
                       💬 Chat
                     </button>
@@ -246,7 +238,7 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                           studentName: student.studentName
                         });
                       }}
-                      style={styles.removeButton}
+                      className="flex-1 cursor-pointer rounded-[10px] border border-[#ed4956] bg-white p-2.5 text-[13px] font-semibold text-[#ed4956] outline-none transition-all"
                     >
                       Xóa
                     </button>
@@ -266,7 +258,7 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
                       }
                     });
                   }}
-                  style={styles.chatButton}
+                  className="mt-3 w-full cursor-pointer rounded-[10px] border-none bg-[#0095f6] p-2.5 text-[13px] font-semibold text-white outline-none transition-all"
                 >
                   💬 Chat
                 </button>
@@ -278,207 +270,6 @@ const StudentList: React.FC<StudentListProps> = ({ vscode, classItem, currentUse
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    padding: '24px',
-    backgroundColor: '#fafafa',
-    minHeight: '100vh',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  backButton: {
-    background: 'none',
-    border: 'none',
-    fontSize: '24px',
-    cursor: 'pointer',
-    color: '#262626',
-    padding: '8px',
-    marginBottom: '16px',
-    outline: 'none',
-    transition: 'color 0.2s',
-  },
-  header: {
-    marginBottom: '24px',
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '700',
-    margin: 0,
-    marginBottom: '8px',
-    color: '#000',
-    letterSpacing: '-0.5px',
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#8e8e8e',
-    margin: 0,
-  },
-  chatGroupButton: {
-    padding: '12px 24px',
-    backgroundColor: '#0095f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '12px',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    outline: 'none',
-    whiteSpace: 'nowrap' as const,
-  },
-  empty: {
-    textAlign: 'center' as const,
-    padding: '60px 20px',
-    backgroundColor: '#fff',
-    borderRadius: '16px',
-    border: '1px solid #dbdbdb',
-  },
-  emptyText: {
-    fontSize: '16px',
-    color: '#8e8e8e',
-  },
-  studentGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '12px',
-  },
-  studentCard: {
-    backgroundColor: '#fff',
-    border: '2px solid #dbdbdb',
-    borderRadius: '12px',
-    padding: '16px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  },
-  currentUserCard: {
-    backgroundColor: '#f0f8ff',
-    borderColor: '#0095f6',
-    boxShadow: '0 2px 8px rgba(0, 149, 246, 0.15)',
-  },
-  studentName: {
-    fontSize: '16px',
-    fontWeight: '600',
-    marginBottom: '8px',
-    color: '#262626',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    flexWrap: 'wrap' as const,
-  },
-  currentUserName: {
-    color: '#0095f6',
-    fontWeight: '700',
-  },
-  badge: {
-    fontSize: '11px',
-    fontWeight: '600',
-    backgroundColor: '#0095f6',
-    color: '#fff',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    textTransform: 'uppercase' as const,
-  },
-  studentInfo: {
-    fontSize: '13px',
-  },
-  infoItem: {
-    margin: '6px 0',
-    color: '#262626',
-  },
-  label: {
-    color: '#8e8e8e',
-    fontWeight: '500',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '12px',
-  },
-  chatButton: {
-    flex: 1,
-    padding: '10px',
-    backgroundColor: '#0095f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '10px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    outline: 'none',
-  },
-  removeButton: {
-    flex: 1,
-    padding: '10px',
-    backgroundColor: '#fff',
-    color: '#ed4956',
-    border: '1px solid #ed4956',
-    borderRadius: '10px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    outline: 'none',
-  },
-  commitList: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px',
-  },
-  commitCard: {
-    backgroundColor: '#fff',
-    border: '1px solid #dbdbdb',
-    borderRadius: '12px',
-    padding: '16px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  },
-  commitHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '8px',
-  },
-  commitMessage: {
-    fontSize: '15px',
-    fontWeight: '600',
-    margin: 0,
-    color: '#262626',
-    flex: 1,
-  },
-  viewButton: {
-    padding: '6px 16px',
-    backgroundColor: '#0095f6',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    outline: 'none',
-  },
-  commitMeta: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '13px',
-    color: '#8e8e8e',
-    marginBottom: '8px',
-  },
-  commitAuthor: {
-    fontWeight: '500',
-  },
-  commitDate: {},
-  commitSha: {
-    fontSize: '12px',
-    fontFamily: 'monospace',
-    color: '#8e8e8e',
-    backgroundColor: '#fafafa',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    display: 'inline-block',
-  },
 };
 
 export default StudentList;

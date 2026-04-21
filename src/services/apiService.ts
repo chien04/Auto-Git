@@ -103,12 +103,73 @@ export interface CodeCommentResponse {
     updatedAt: string;
 }
 
-export interface ResolveCommentResponse extends CodeCommentResponse {}
+export interface ResolveCommentResponse extends CodeCommentResponse { }
+
+export interface FileContext {
+    filename: string;
+    fileContent: string;
+    hashcode: string;
+}
+
+export interface AiChatRequest {
+    message: string;
+    workspace: string;
+    files: FileContext[];
+}
+
+export interface VectorFileDTO {
+    fileName: string;
+    fileContent: string;
+    hashcode: string;
+}
+
+export interface VectorStudentAssignmentDTO {
+    studentName: string;
+    files: VectorFileDTO[];
+}
+
+export interface WorkspaceUploadRequest {
+    assignmentCode: string;
+    studentAssignments: VectorStudentAssignmentDTO[];
+}
 
 export class ApiService {
     private api: AxiosInstance;
     private baseURL: string;
     private jwtToken: string | null = null;
+
+    private normalizeRequestPayload(data: unknown): unknown {
+        if (typeof data === 'undefined') {
+            return null;
+        }
+
+        if (data === null) {
+            return null;
+        }
+
+        if (typeof data === 'string') {
+            try {
+                return JSON.parse(data);
+            } catch {
+                return data;
+            }
+        }
+
+        if (data instanceof URLSearchParams) {
+            return Object.fromEntries(data.entries());
+        }
+
+        if (
+            typeof data === 'object' &&
+            !Array.isArray(data) &&
+            Object.getPrototypeOf(data) === Object.prototype &&
+            Object.keys(data as Record<string, unknown>).length === 0
+        ) {
+            return null;
+        }
+
+        return data;
+    }
 
     constructor(baseURL: string = 'http://localhost:8080/api') {
         this.baseURL = baseURL;
@@ -127,22 +188,21 @@ export class ApiService {
                     config.headers.Authorization = `Bearer ${this.jwtToken}`;
                 }
 
-                // Log API call for debugging
+                // Log API request with method, endpoint, payload and query params.
                 const method = (config.method || 'GET').toUpperCase();
                 const url = config.url || '';
                 const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+                const payload = this.normalizeRequestPayload(config.data);
+                const params = config.params ?? null;
+                const requestDetail = {
+                    api: fullUrl,
+                    method,
+                    payload,
+                    params
+                };
 
                 console.log(`[API ${method}] ${fullUrl}`);
-
-                // Log payload if exists
-                if (config.data) {
-                    console.log(`[Payload]`, config.data);
-                }
-
-                // Log query params if exists
-                if (config.params) {
-                    console.log(`[Params]`, config.params);
-                }
+                console.log(`[API Request Detail] ${JSON.stringify(requestDetail)}`);
 
                 return config;
             },
@@ -719,6 +779,14 @@ export class ApiService {
 
     async markMessageAsRead(messageId: number): Promise<void> {
         await this.api.post(`/messages/${messageId}/read`, {});
+    }
+
+    async askAi(payload: AiChatRequest): Promise<void> {
+        await this.api.post('/ai/ask', payload);
+    }
+
+    async uploadVectorDb(payload: WorkspaceUploadRequest): Promise<void> {
+        await this.api.post('/ai/upload-vector-db', payload);
     }
 
     // ===================== NOTIFICATION API =====================

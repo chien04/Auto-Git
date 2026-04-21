@@ -59,7 +59,7 @@ export const StudentStatsCard: React.FC<StatsCardProps> = ({ vscode, apiService 
     };
 
     if (loading) {
-        return <div style={styles.loading}>Đang tải thống kê...</div>;
+        return <div className="p-5 text-center text-[13px] text-[#8e8e8e]">Đang tải thống kê...</div>;
     }
 
     if (!data) {
@@ -67,80 +67,31 @@ export const StudentStatsCard: React.FC<StatsCardProps> = ({ vscode, apiService 
     }
 
     return (
-        <div style={styles.container}>
-            <h3 style={styles.title}>Thống kê của bạn</h3>
+        <div className="mb-6 rounded-xl border border-[#dbdbdb] bg-white p-5">
+            <h3 className="mb-4 text-lg font-bold text-[#262626]">Thống kê của bạn</h3>
             
-            <div style={styles.grid}>
-                <div style={styles.statItem}>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4">
+                <div className="flex items-center rounded-lg bg-[#fafafa] p-3">
                     <div>
-                        <div style={styles.statLabel}>Tổng commit</div>
-                        <div style={styles.statValue}>{data.totalCommits}</div>
+                        <div className="mb-1 text-xs text-[#8e8e8e]">Tổng commit</div>
+                        <div className="text-[20px] font-bold text-[#262626]">{data.totalCommits}</div>
                     </div>
                 </div>
 
-                <div style={styles.statItem}>
+                <div className="flex items-center rounded-lg bg-[#fafafa] p-3">
                     <div>
-                        <div style={styles.statLabel}>Commit gần nhất</div>
-                        <div style={styles.statValueSmall}>{formatLastCommit(data.lastCommitAt)}</div>
+                        <div className="mb-1 text-xs text-[#8e8e8e]">Commit gần nhất</div>
+                        <div className="text-[13px] font-semibold text-[#0095f6]">{formatLastCommit(data.lastCommitAt)}</div>
                     </div>
                 </div>
 
-                <div style={styles.statItem}>
+                <div className="flex items-center rounded-lg bg-[#fafafa] p-3">
                     <div>
-                        <div style={styles.statLabel}>Lớp tham gia</div>
-                        <div style={styles.statValue}>{data.totalClasses}</div>
+                        <div className="mb-1 text-xs text-[#8e8e8e]">Lớp tham gia</div>
+                        <div className="text-[20px] font-bold text-[#262626]">{data.totalClasses}</div>
                     </div>
                 </div>
             </div>
         </div>
     );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-    container: {
-        marginBottom: '24px',
-        backgroundColor: '#fff',
-        border: '1px solid #dbdbdb',
-        borderRadius: '12px',
-        padding: '20px',
-    },
-    title: {
-        fontSize: '18px',
-        fontWeight: 'bold',
-        marginBottom: '16px',
-        color: '#262626',
-    },
-    grid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-        gap: '16px',
-    },
-    statItem: {
-        display: 'flex',
-        alignItems: 'center',
-        padding: '12px',
-        backgroundColor: '#fafafa',
-        borderRadius: '8px',
-    },
-    statLabel: {
-        fontSize: '12px',
-        color: '#8e8e8e',
-        marginBottom: '4px',
-    },
-    statValue: {
-        fontSize: '20px',
-        fontWeight: 'bold',
-        color: '#262626',
-    },
-    statValueSmall: {
-        fontSize: '13px',
-        fontWeight: '600',
-        color: '#0095f6',
-    },
-    loading: {
-        padding: '20px',
-        textAlign: 'center',
-        color: '#8e8e8e',
-        fontSize: '13px',
-    },
 };

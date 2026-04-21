@@ -167,9 +167,9 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
 
   if (loading) {
     return (
-      <div style={styles.loading}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Đang tải...</p>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#fafafa]">
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#e5e5e5] border-t-black" />
+        <p className="mt-4 text-sm font-medium text-[#8e8e8e]">Đang tải...</p>
       </div>
     );
   }
@@ -188,9 +188,9 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="relative flex min-h-screen">
       {/* Main Content */}
-      <div style={styles.mainContentFull}>
+      <div className="min-h-screen flex-1">
         {activeView === 'CHAT' ? (
           <ChatView
             vscode={vscode}
@@ -208,9 +208,10 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
       
       {/* Chat Window Overlay */}
       {chatOpen && chatConfig && user && (
-        <div style={styles.chatOverlay}>
+        <div className="fixed bottom-5 right-5 z-[1000] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
           <ChatWindow
             vscode={vscode}
+            apiService={apiService}
             currentUserId={parseInt(user.userId)}
             currentUserName={user.name}
             otherUserId={chatConfig.otherUserId}
@@ -224,49 +225,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
       )}
     </div>
   );
-};
-
-const styles = {
-  container: {
-    display: 'flex',
-    minHeight: '100vh',
-    position: 'relative' as const,
-  },
-  mainContentFull: {
-    flex: 1,
-    minHeight: '100vh',
-  },
-  loading: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#fafafa',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '3px solid #e5e5e5',
-    borderTop: '3px solid #000',
-    borderRadius: '50%',
-    animation: 'spin 0.8s linear infinite',
-  },
-  loadingText: {
-    marginTop: '16px',
-    fontSize: '14px',
-    color: '#8e8e8e',
-    fontWeight: '500',
-  },
-  chatOverlay: {
-    position: 'fixed' as const,
-    bottom: '20px',
-    right: '20px',
-    zIndex: 1000,
-    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-    borderRadius: '8px',
-  },
 };
 
 export default MainApp;

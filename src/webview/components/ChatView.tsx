@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Bot } from 'lucide-react';
+import { AI_ASSISTANT, AI_ASSISTANT_ID } from '../constants/aiConstants';
 
 interface ChatViewProps {
   vscode: any;
@@ -13,6 +15,9 @@ interface Classroom {
   classCode: string;
   teacherName: string;
   studentCount: number;
+  lastMessage?: string;
+  lastMessageTime?: string;
+  unreadCount?: number;
 }
 
 interface RecentPrivateChat {
@@ -31,6 +36,11 @@ interface SearchMember {
   className?: string;
 }
 
+type ChatPreview = {
+  lastMessage?: string;
+  lastMessageTime?: string;
+};
+
 const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, onChatClosed }) => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [recentPrivateChats, setRecentPrivateChats] = useState<RecentPrivateChat[]>([]);
@@ -39,7 +49,27 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   const [searchResults, setSearchResults] = useState<SearchMember[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [aiPreview, setAiPreview] = useState<ChatPreview>({});
+  const [classPreviews, setClassPreviews] = useState<Record<number, ChatPreview>>({});
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getMessageTime = (message: any): number => {
+    const raw = message?.createdAt || message?.sentAt;
+    const parsed = raw ? new Date(raw).getTime() : Number.NaN;
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const buildPreviewFromMessages = (messages: any[] = []): ChatPreview => {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return {};
+    }
+
+    const latest = [...messages].sort((a, b) => getMessageTime(b) - getMessageTime(a))[0];
+    return {
+      lastMessage: latest?.content || '',
+      lastMessageTime: latest?.createdAt || latest?.sentAt
+    };
+  };
 
   useEffect(() => {
     // Set up message listener FIRST
@@ -50,15 +80,25 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         console.log('[ChatView] ✓ Received chatClassroomsLoaded');
         if (Array.isArray(message.classes)) {
           setClassrooms(message.classes);
+          loadClassPreviews(message.classes);
           setLoading(false);
         }
       } else if (message && message.type === 'recentPrivateChatsLoaded') {
         console.log('[ChatView] ✓ Received recentPrivateChatsLoaded');
-        setRecentPrivateChats(message.chats || []);
+        const chats = Array.isArray(message.chats) ? message.chats : [];
+        setRecentPrivateChats(chats.filter((chat: any) => chat.userId !== AI_ASSISTANT_ID));
       } else if (message && message.type === 'chatMembersSearchResult') {
         console.log('[ChatView] ✓ Received chatMembersSearchResult');
         setSearchResults(message.results || []);
         setIsSearching(false);
+      } else if (message && message.type === 'privateMessagesLoaded' && message.otherUserId === AI_ASSISTANT_ID) {
+        setAiPreview(buildPreviewFromMessages(message.messages || []));
+      } else if (message && message.type === 'classMessagesLoaded' && typeof message.classroomId === 'number') {
+        const preview = buildPreviewFromMessages(message.messages || []);
+        setClassPreviews((prev) => ({
+          ...prev,
+          [message.classroomId]: preview
+        }));
       } else if (message && message.type === 'refreshChatView') {
         refreshData();
       } else if (message && message.type === 'newMessage') {
@@ -81,11 +121,13 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
     setLoading(true);
     loadClassrooms();
     loadRecentPrivateChats();
+    loadAiPreview();
   };
 
   const refreshData = () => {
     loadClassrooms();
     loadRecentPrivateChats();
+    loadAiPreview();
   };
 
   const loadClassrooms = () => {
@@ -96,6 +138,16 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   const loadRecentPrivateChats = () => {
     console.log('[ChatView] Requesting recent private chats via postMessage');
     vscode.postMessage({ type: 'getRecentPrivateChats' });
+  };
+
+  const loadAiPreview = () => {
+    vscode.postMessage({ type: 'getPrivateMessages', otherUserId: AI_ASSISTANT_ID });
+  };
+
+  const loadClassPreviews = (classes: Classroom[]) => {
+    classes.forEach((classroom) => {
+      vscode.postMessage({ type: 'getClassMessages', classroomId: classroom.id });
+    });
   };
 
   const searchMembers = (query: string = '') => {
@@ -208,7 +260,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   };
 
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       {/* Search Box - Right below header */}
       <div className="px-4 py-3 border-b border-[#dbdfe6]">
         <div className="relative flex items-center">
@@ -241,7 +293,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
       </div>
 
       {/* Chat List */}
-      <main className="flex-1 overflow-y-auto bg-white pb-24">
+      <main className="flex-1 overflow-y-auto bg-white pb-28">
         {isSearchMode ? (
           isSearching ? (
             <div className="text-center py-12">
@@ -281,17 +333,36 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         ) : (
           /* Class Group Chats and Private Chats */
           <>
-            {classrooms.length === 0 && recentPrivateChats.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-[#616f89] text-sm">Chưa có cuộc trò chuyện nào</p>
-              </div>
-            ) : (
               <>
                 {/* Merge and sort all chats by time */}
                 {(() => {
+                  const aiItem = {
+                    ...AI_ASSISTANT,
+                    userEmail: 'ai-assistant@system',
+                    lastMessage: aiPreview.lastMessage,
+                    lastMessageTime: aiPreview.lastMessageTime,
+                    type: 'private',
+                    time: aiPreview.lastMessageTime
+                  };
+
                   const merged = [
-                    ...classrooms.map(c => ({ ...c, type: 'group', time: (c as any).lastMessageTime })),
-                    ...recentPrivateChats.map(c => ({ ...c, type: 'private', time: c.lastMessageTime }))
+                    aiItem,
+                    ...classrooms.map(c => {
+                      const preview = classPreviews[c.id] || {};
+                      const latestTime = preview.lastMessageTime || c.lastMessageTime;
+                      return {
+                        ...c,
+                        type: 'group',
+                        lastMessage: preview.lastMessage || c.lastMessage,
+                        lastMessageTime: latestTime,
+                        time: latestTime
+                      };
+                    }),
+                    ...recentPrivateChats.map(c => ({
+                      ...c,
+                      type: 'private',
+                      time: c.lastMessageTime
+                    }))
                   ];
                   
                   const sorted = merged.sort((a: any, b: any) => {
@@ -324,10 +395,10 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
                               )}
                             </div>
                             <div className="flex items-center justify-between">
-                              <p className="text-[12px] text-[#616f89] truncate">
-                                Class Group • {chat.studentCount} members
+                              <p className="text-[12px] text-[#616f89] truncate font-medium">
+                                {chat.lastMessage || `Class Group • ${chat.studentCount} members`}
                               </p>
-                              {chat.lastMessage && (
+                              {chat.unreadCount && chat.unreadCount > 0 && (
                                 <div className="w-2 h-2 rounded-full bg-[#111318] shrink-0"></div>
                               )}
                             </div>
@@ -335,22 +406,27 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
                         </div>
                       );
                     } else {
+                      const isAI = chat.userId === AI_ASSISTANT_ID;
                       return (
                         <div
                           key={`private-${chat.userId}`}
                           className="flex items-start gap-3 px-4 py-4 hover:bg-[#fafafa] cursor-pointer border-b border-[#f7f7f7]"
                           onClick={() => handleOpenPrivateChat(chat)}
                         >
-                          <div className="w-12 h-12 rounded-full bg-[#9b59b6] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                            {getInitials(chat.userName)}
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${
+                            isAI ? 'bg-[#4b5563] flex items-center justify-center' : 'bg-[#9b59b6]'
+                          }`}>
+                            {isAI ? <Bot size={24} /> : getInitials(chat.userName)}
                           </div>
                           <div className="flex flex-col flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2 overflow-hidden mb-0.5">
                                 <p className="text-[14px] font-semibold truncate text-[#111318]">{chat.userName}</p>
-                                <span className="px-1.5 py-0.5 rounded bg-[#111318] text-[10px] font-medium text-white uppercase tracking-tighter">
-                                  Student
-                                </span>
+                                {!isAI && (
+                                  <span className="px-1.5 py-0.5 rounded bg-[#111318] text-[10px] font-medium text-white uppercase tracking-tighter">
+                                    Student
+                                  </span>
+                                )}
                               </div>
                               {chat.lastMessageTime && (
                                 <span className="text-[10px] text-[#9ca3af]">{formatTime(chat.lastMessageTime)}</span>
@@ -370,11 +446,10 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
                     }
                   })}
               </>
-            )}
           </>
         )}
       </main>
-    </>
+    </div>
   );
 };
 

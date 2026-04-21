@@ -27,7 +27,11 @@ import {
     handleGetTeacherClassStatistics
 } from './handlers/dashboardHandlers';
 import {
+    handleAskAiWithContext,
     handleGetCurrentWorkspace,
+    handleOpenChatContextFile,
+    handlePickWorkspaceFileForChat,
+    handleRequestChatActiveFile,
     notifyWorkspaceChanged
 } from './handlers/workspaceInfoHandlers';
 import {
@@ -78,6 +82,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private apiService: ApiService;
     private gitService: GitService;
+    private _activeEditorChangeDisposable?: vscode.Disposable;
 
     private async _closeAllEditorsBeforeWorkspaceOpen() {
         try {
@@ -96,6 +101,9 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     ) {
         this.apiService = apiService;
         this.gitService = gitService;
+        this._activeEditorChangeDisposable = vscode.window.onDidChangeActiveTextEditor(() => {
+            this._handleRequestChatActiveFile();
+        });
     }
 
     private _getAssignmentHandlerDeps(): AssignmentHandlerDeps {
@@ -123,6 +131,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         };
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        this._handleRequestChatActiveFile();
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
@@ -353,6 +363,22 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleMarkMessageAsRead(message.messageId);
                 break;
 
+            case 'requestChatActiveFile':
+                await this._handleRequestChatActiveFile();
+                break;
+
+            case 'pickWorkspaceFileForChat':
+                await this._handlePickWorkspaceFileForChat();
+                break;
+
+            case 'openChatContextFile':
+                await this._handleOpenChatContextFile(message.filePath);
+                break;
+
+            case 'askAiWithContext':
+                await this._handleAskAiWithContext(message.message, message.contextFiles);
+                break;
+
             // ===================== NOTIFICATION HANDLERS =====================
             case 'getNotifications':
                 await this._handleGetNotifications();
@@ -513,10 +539,10 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleExportAssignmentExcel(
-    assignmentId: string,
-    assignmentCode?: string,
-    title?: string
-) {
+        assignmentId: string,
+        assignmentCode?: string,
+        title?: string
+    ) {
         await handleExportAssignmentExcel(this._getAssignmentHandlerDeps(), assignmentId, assignmentCode, title);
     }
 
@@ -688,6 +714,22 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
     private async _handleMarkMessageAsRead(messageId: number) {
         await handleMarkMessageAsRead(this.apiService, messageId);
+    }
+
+    private async _handleRequestChatActiveFile() {
+        await handleRequestChatActiveFile((message) => this._postMessage(message));
+    }
+
+    private async _handlePickWorkspaceFileForChat() {
+        await handlePickWorkspaceFileForChat((message) => this._postMessage(message));
+    }
+
+    private async _handleOpenChatContextFile(filePath: string) {
+        await handleOpenChatContextFile(filePath);
+    }
+
+    private async _handleAskAiWithContext(message: string, contextFiles?: string[]) {
+        await handleAskAiWithContext(this.apiService, message, contextFiles, (payload) => this._postMessage(payload));
     }
 
     private async _handleGetNotifications() {

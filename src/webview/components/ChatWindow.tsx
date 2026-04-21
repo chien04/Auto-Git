@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ChatMessage, MessageType, getWebSocketService } from '../services/websocketService';
-import { ImagePlus, Paperclip, Send, ThumbsUp, File } from 'lucide-react';
+import { Plus, Send, ThumbsUp, File, X, ImagePlus, Paperclip, Check, CheckCheck, Copy } from 'lucide-react';
+import { ApiService } from '../../services/apiService';
+import { AI_ASSISTANT_ID, AI_STREAM_DONE } from '../constants/aiConstants';
+import 'katex/dist/katex.min.css';
+
+const ReactMarkdown = require('react-markdown').default;
+const remarkGfm = require('remark-gfm').default;
+const remarkMath = require('remark-math').default;
+const rehypeKatex = require('rehype-katex').default;
 
 type AttachmentPayload = {
   kind: 'image' | 'file';
@@ -11,6 +19,7 @@ type AttachmentPayload = {
 
 interface ChatWindowProps {
   vscode: any;
+  apiService: ApiService;
   currentUserId: number;
   currentUserName: string;
   otherUserId?: number;
@@ -24,6 +33,7 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
   vscode,
+  apiService,
   currentUserId,
   currentUserName,
   otherUserId,
@@ -39,14 +49,99 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [pendingAttachment, setPendingAttachment] = useState<AttachmentPayload | null>(null);
+  const [activeFilePath, setActiveFilePath] = useState('');
+  const [contextFiles, setContextFiles] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wsService = getWebSocketService();
   const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
+  const aiStreamingMessageIdRef = useRef<number | null>(null);
+  const copyCodeResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [copiedCodeBlockId, setCopiedCodeBlockId] = useState<string | null>(null);
 
   const ATTACHMENT_PREFIX = '__ATTACHMENT__:';
+  const isAiAssistantChat = chatType === MessageType.PRIVATE && otherUserId === AI_ASSISTANT_ID;
+
+  const handleCopyCodeBlock = async (codeText: string, blockId: string) => {
+    if (!codeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setCopiedCodeBlockId(blockId);
+
+      if (copyCodeResetTimerRef.current) {
+        clearTimeout(copyCodeResetTimerRef.current);
+      }
+      copyCodeResetTimerRef.current = setTimeout(() => {
+        setCopiedCodeBlockId(null);
+      }, 1400);
+    } catch (error) {
+      console.error('[ChatWindow] Failed to copy code block:', error);
+    }
+  };
+
+  const aiMarkdownComponents = {
+    h1: ({ children }: { children?: React.ReactNode }) => (
+      <h1 className="mb-2 text-[16px] font-semibold leading-6">{children}</h1>
+    ),
+    h2: ({ children }: { children?: React.ReactNode }) => (
+      <h2 className="mb-2 mt-2 text-[15px] font-semibold leading-6">{children}</h2>
+    ),
+    h3: ({ children }: { children?: React.ReactNode }) => (
+      <h3 className="mb-1.5 mt-2 text-[15px] font-medium leading-6">{children}</h3>
+    ),
+    p: ({ children }: { children?: React.ReactNode }) => (
+      <p className="mb-2 whitespace-pre-wrap text-[15px] leading-relaxed">{children}</p>
+    ),
+    ul: ({ children }: { children?: React.ReactNode }) => (
+      <ul className="mb-2 ml-5 list-disc space-y-1 text-[15px] leading-relaxed">{children}</ul>
+    ),
+    ol: ({ children }: { children?: React.ReactNode }) => (
+      <ol className="mb-2 ml-5 list-decimal space-y-1 text-[15px] leading-relaxed">{children}</ol>
+    ),
+    li: ({ children }: { children?: React.ReactNode }) => <li className="leading-relaxed">{children}</li>,
+    pre: ({ children }: { children?: React.ReactNode }) => {
+      const firstChild = React.Children.toArray(children)[0];
+      const childElement = React.isValidElement(firstChild)
+        ? firstChild as React.ReactElement<{ className?: string; children?: React.ReactNode }>
+        : null;
+
+      const className = childElement?.props?.className || '';
+      const rawCode = String(childElement?.props?.children ?? '').replace(/\n$/, '');
+      const languageMatch = /language-([\w-]+)/.exec(className);
+      const languageLabel = languageMatch ? languageMatch[1] : 'Plaintext';
+      const codeBlockId = `${languageLabel}:${rawCode.slice(0, 64)}`;
+
+      return (
+        <div className="mb-2 overflow-hidden rounded-2xl border border-[#d8dee6] bg-[#eceff4]">
+          <div className="flex items-center justify-between border-b border-[#d8dee6] px-3 py-1.5">
+            <span className="text-[13px] font-medium text-[#3f4753]">{languageLabel}</span>
+            <button
+              type="button"
+              onClick={() => handleCopyCodeBlock(rawCode, codeBlockId)}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-md text-[#69717d] transition hover:bg-[#dfe4ea] hover:text-[#2f3641]"
+              title={copiedCodeBlockId === codeBlockId ? 'Copied' : 'Copy code'}
+              aria-label="Copy code"
+            >
+              {copiedCodeBlockId === codeBlockId ? <Check size={14} strokeWidth={2.2} /> : <Copy size={14} strokeWidth={2.2} />}
+            </button>
+          </div>
+          <pre className="overflow-x-auto px-3 py-2 text-[14px] leading-6 text-[#111827]">
+            <code className={`${className} bg-transparent`}>{rawCode}</code>
+          </pre>
+        </div>
+      );
+    },
+    code: ({ children }: { children?: React.ReactNode }) => (
+      <code className="rounded-md bg-[#eceff4] px-1.5 py-0.5 font-mono text-[0.92em] text-[#111827]">
+        {children}
+      </code>
+    )
+  };
 
   const encodeAttachment = (payload: AttachmentPayload): string => {
     return `${ATTACHMENT_PREFIX}${JSON.stringify(payload)}`;
@@ -63,21 +158,46 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const addContextFile = (filePath: string, pinToTop = false) => {
+    if (!filePath) {
+      return;
+    }
+
+    setContextFiles((prev) => {
+      const normalized = filePath.trim();
+      if (!normalized) {
+        return prev;
+      }
+
+      const deduped = prev.filter((item) => item !== normalized);
+      const merged = pinToTop ? [normalized, ...deduped] : [...deduped, normalized];
+      return merged.slice(0, 8);
+    });
+  };
+
+  const removeContextFile = (filePath: string) => {
+    setContextFiles((prev) => prev.filter((item) => item !== filePath));
+  };
+
   // Check WebSocket connection status
   useEffect(() => {
     const checkConnection = () => {
       setIsConnected(wsService.isConnected());
     };
-    
+
     // Check immediately
     checkConnection();
-    
+
     // Check every second
     connectionCheckInterval.current = setInterval(checkConnection, 1000);
-    
+
     return () => {
       if (connectionCheckInterval.current) {
         clearInterval(connectionCheckInterval.current);
+      }
+
+      if (copyCodeResetTimerRef.current) {
+        clearTimeout(copyCodeResetTimerRef.current);
       }
     };
   }, []);
@@ -98,12 +218,51 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       } else if (msg && msg.type === 'classMessagesLoaded' && msg.classroomId === classroomId) {
         setMessages(msg.messages || []);
         setLoading(false);
+      } else if (isAiAssistantChat && msg && msg.type === 'chatActiveFile') {
+        const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
+        setActiveFilePath(filePath);
+        if (filePath) {
+          addContextFile(filePath, true);
+        }
+      } else if (isAiAssistantChat && msg && msg.type === 'chatWorkspaceFilePicked') {
+        const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
+        if (filePath) {
+          addContextFile(filePath);
+        }
+      } else if (isAiAssistantChat && msg && msg.type === 'aiAskFailed') {
+        const errorText = typeof msg.error === 'string' && msg.error.trim()
+          ? msg.error
+          : 'AI khong phan hoi!';
+        const errorMessage: ChatMessage = {
+          id: Date.now() + 1,
+          senderId: AI_ASSISTANT_ID,
+          senderName: otherUserName || 'AI Assistant',
+          receiverId: currentUserId,
+          content: errorText,
+          type: MessageType.PRIVATE,
+          isRead: true,
+          sentAt: new Date().toISOString()
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       }
     };
     window.addEventListener('message', handleMessage);
+
+    if (isAiAssistantChat) {
+      vscode.postMessage({ type: 'requestChatActiveFile' });
+    }
     loadMessageHistory();
-    return () => { window.removeEventListener('message', handleMessage); };
-  }, [otherUserId, classroomId]);
+
+    // Fallback: Set loading to false after 5 seconds even if response hasn't arrived
+    const loadingTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearTimeout(loadingTimeout);
+    };
+  }, [otherUserId, classroomId, isAiAssistantChat]);
 
   // Subscribe to WebSocket messages via GLOBAL LISTENER (no direct subscription)
   useEffect(() => {
@@ -119,15 +278,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.log('[ChatWindow] 🔥 REALTIME WS MESSAGE (via global listener):', message);
       console.log('[ChatWindow] Message from:', message.senderId, 'to:', message.receiverId);
       console.log('[ChatWindow] Current chat with:', otherUserId, 'type:', chatType);
-      
+
       // Filter messages based on chat type
       if (chatType === MessageType.PRIVATE && otherUserId) {
         // Only add messages from/to this chat partner
         const isFromOther = message.senderId === otherUserId;
         const isToOther = message.receiverId === otherUserId && message.senderId === currentUserId;
-        
+
         console.log('[ChatWindow] isFromOther:', isFromOther, 'isToOther:', isToOther);
-        
+
         if (isFromOther || isToOther) {
           console.log('[ChatWindow] ✅ Message matches current chat, adding to UI');
           setMessages((prev) => {
@@ -161,10 +320,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             console.log('[ChatWindow] Adding new message', message.id);
             return [...prev, message];
           });
-          
+
           // Always scroll and mark as read immediately when receiving
           setTimeout(() => scrollToBottom(), 50);
-          
+
           // Mark as read if it's from the other user (immediate)
           if (isFromOther && !message.isRead) {
             console.log('[ChatWindow] Marking message as read:', message.id);
@@ -175,7 +334,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
         console.log('[ChatWindow] Checking CLASS message for classroom:', classroomId);
-        
+
         if (message.classroomId === classroomId) {
           console.log('[ChatWindow] ✅ Class message matches current classroom, adding to UI');
           setMessages((prev) => {
@@ -185,17 +344,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               console.log('[ChatWindow] Message already exists, skipping');
               return prev;
             }
-            
+
             // If this is our own message (coming back from broadcast),
             // replace the optimistic message instead of adding a duplicate
             if (message.senderId === currentUserId) {
               // Find and replace optimistic message (with temporary Date.now() id)
-              const optimisticIndex = prev.findIndex(m => 
-                m.senderId === currentUserId && 
+              const optimisticIndex = prev.findIndex(m =>
+                m.senderId === currentUserId &&
                 m.content === message.content &&
                 m.id > Date.now() - 5000 // Within last 5 seconds
               );
-              
+
               if (optimisticIndex !== -1) {
                 // Replace optimistic with real message
                 console.log('[ChatWindow] Replacing optimistic message with real one');
@@ -204,12 +363,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 return newMessages;
               }
             }
-            
+
             // Add new message from others
             console.log('[ChatWindow] Adding new class message');
             return [...prev, message];
           });
-          
+
           setTimeout(() => scrollToBottom(), 50);
         } else {
           console.log('[ChatWindow] ❌ Class message does not match current classroom, ignoring');
@@ -260,7 +419,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     vscode.postMessage({ type: 'markMessageAsRead', messageId });
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const hasText = newMessage.trim().length > 0;
     const payloadContent = pendingAttachment ? encodeAttachment(pendingAttachment) : (hasText ? newMessage.trim() : '👍');
 
@@ -268,7 +427,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       return;
     }
 
-    if (!isConnected) {
+    // AI chat doesn't need WebSocket connection
+    if (!isAiAssistantChat && !isConnected) {
       alert('WebSocket chưa kết nối. Vui lòng đợi kết nối được thiết lập.');
       return;
     }
@@ -289,35 +449,116 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       // Add message to UI immediately
       setMessages((prev) => [...prev, optimisticMessage]);
-      
-      // Send via WebSocket
-      if (chatType === MessageType.PRIVATE && otherUserId) {
+
+      // Send via REST for AI assistant, otherwise normal WebSocket chat
+      if (isAiAssistantChat) {
+        vscode.postMessage({
+          type: 'askAiWithContext',
+          message: payloadContent,
+          contextFiles
+        });
+      } else if (chatType === MessageType.PRIVATE && otherUserId) {
         wsService.sendPrivateMessage(otherUserId, payloadContent);
       } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
         wsService.sendClassMessage(classroomId, payloadContent);
       }
-      
+
       setNewMessage('');
       setPendingAttachment(null);
-      
+
       // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = '32px';
       }
-      
-      // Notify parent to refresh chat list
-      setTimeout(() => {
-        window.parent.postMessage({ type: 'newMessage' }, '*');
-      }, 500);
-      
+
+      if (!isAiAssistantChat) {
+        // Notify parent to refresh chat list
+        setTimeout(() => {
+          window.parent.postMessage({ type: 'newMessage' }, '*');
+        }, 500);
+      }
+
       scrollToBottom();
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Không thể gửi tin nhắn. Vui lòng thử lại.');
+      if (isAiAssistantChat) {
+        const errorMessage: ChatMessage = {
+          id: Date.now() + 1,
+          senderId: AI_ASSISTANT_ID,
+          senderName: otherUserName || 'AI Assistant',
+          receiverId: currentUserId,
+          content: 'AI khong phan hoi!',
+          type: MessageType.PRIVATE,
+          isRead: true,
+          sentAt: new Date().toISOString()
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } else {
+        alert('Không thể gửi tin nhắn. Vui lòng thử lại.');
+      }
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  useEffect(() => {
+    if (!isAiAssistantChat || !wsService.isConnected()) {
+      return;
+    }
+
+    const unsubscribe = wsService.subscribeToAiStream((chunk: string) => {
+      if (!chunk) {
+        return;
+      }
+
+      if (chunk === AI_STREAM_DONE) {
+        aiStreamingMessageIdRef.current = null;
+        return;
+      }
+
+      setMessages((prev) => {
+        const streamingId = aiStreamingMessageIdRef.current;
+
+        if (!streamingId) {
+          const newId = Date.now() + 1;
+          aiStreamingMessageIdRef.current = newId;
+          return [
+            ...prev,
+            {
+              id: newId,
+              senderId: AI_ASSISTANT_ID,
+              senderName: otherUserName || 'AI Assistant',
+              receiverId: currentUserId,
+              content: chunk,
+              type: MessageType.PRIVATE,
+              isRead: true,
+              sentAt: new Date().toISOString()
+            }
+          ];
+        }
+
+        return prev.map((msg) => {
+          if (msg.id !== streamingId) {
+            return msg;
+          }
+          return {
+            ...msg,
+            content: (msg.content || '') + chunk,
+            sentAt: new Date().toISOString()
+          };
+        });
+      });
+
+      setTimeout(() => scrollToBottom(), 0);
+    });
+
+    return () => {
+      aiStreamingMessageIdRef.current = null;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [isAiAssistantChat, currentUserId, otherUserName, isConnected]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -329,13 +570,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       setPendingAttachment(null);
     }
     setNewMessage(e.target.value);
-    
+
     // Auto-resize textarea like Messenger
     if (textareaRef.current) {
       textareaRef.current.style.height = '32px';
       const scrollHeight = textareaRef.current.scrollHeight;
       textareaRef.current.style.height = Math.min(scrollHeight, 100) + 'px';
     }
+  };
+
+  const handlePickWorkspaceFile = () => {
+    vscode.postMessage({ type: 'pickWorkspaceFileForChat' });
+  };
+
+  const handleOpenContextFile = (filePath: string) => {
+    if (!filePath) {
+      return;
+    }
+    vscode.postMessage({ type: 'openChatContextFile', filePath });
   };
 
   const scrollToBottom = () => {
@@ -367,11 +619,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const renderMessageContent = (message: ChatMessage) => {
     const attachment = decodeAttachment(message.content);
     if (!attachment) {
+      const isAiMessage = isAiAssistantChat && message.senderId === AI_ASSISTANT_ID;
+
+      if (isAiMessage) {
+        return (
+          <div className="text-[15px] leading-relaxed">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              components={aiMarkdownComponents}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        );
+      }
+
       return (
-        <div style={styles.messageContent}>
+        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
           {message.content}
           {message.senderId === currentUserId && (
-            <span style={styles.readStatus}>{message.isRead ? ' ✓✓' : ' ✓'}</span>
+            <span className="ml-1 inline-flex items-center text-blue-600">
+              {message.isRead ? <CheckCheck size={12} strokeWidth={2.2} /> : <Check size={12} strokeWidth={2.2} />}
+            </span>
           )}
         </div>
       );
@@ -379,17 +649,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
     if (attachment.kind === 'image') {
       return (
-        <div style={styles.attachmentWrapper}>
-          <img src={attachment.dataUrl} alt={attachment.name} style={styles.attachmentImage} />
-          <div style={styles.attachmentName}>{attachment.name}</div>
+        <div className="flex flex-col gap-1.5">
+          <img src={attachment.dataUrl} alt={attachment.name} className="max-h-[220px] max-w-[220px] rounded-sm object-cover" />
+          <div className="text-[11px] text-gray-600">{attachment.name}</div>
         </div>
       );
     }
 
     return (
-      <div style={styles.attachmentWrapper}>
-        <a href={attachment.dataUrl} download={attachment.name} style={styles.fileLink}>
-          <span style={styles.fileLinkInner}>
+      <div className="flex flex-col gap-1.5">
+        <a href={attachment.dataUrl} download={attachment.name} className="text-[12px] font-semibold text-blue-600 underline">
+          <span className="inline-flex items-center gap-1.5">
             <File size={14} strokeWidth={2.2} />
             {attachment.name}
           </span>
@@ -418,6 +688,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const getMessageTimestamp = (message: ChatMessage): number => {
+    const value = message.createdAt || message.sentAt;
+    if (!value) {
+      return Number.NaN;
+    }
+    return new Date(value).getTime();
+  };
+
   // Group messages by date
   const groupedMessages: { [key: string]: ChatMessage[] } = {};
   messages.forEach((msg) => {
@@ -428,435 +706,234 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     groupedMessages[dateKey].push(msg);
   });
 
+  const headerName = chatType === MessageType.PRIVATE ? (otherUserName || 'Unknown') : (classroomName || 'Class Group');
+  const headerInitial = headerName.charAt(0).toUpperCase();
+
   return (
-    <div
-      style={{
-        ...styles.container,
-        ...(fullScreen ? styles.containerFullScreen : {})
-      }}
-    >
+    <div className={fullScreen ? 'mx-auto flex h-screen min-h-screen w-full max-w-[420px] flex-col overflow-hidden border-x border-gray-200 bg-white' : 'flex h-[560px] w-[360px] flex-col overflow-hidden rounded-sm border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.1)]'}>
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerInfo}>
-          {fullScreen ? (
-            <button onClick={onClose} style={styles.backButton} title="Quay lại">
-              ←
-            </button>
-          ) : (
-            <div style={styles.avatar}>
-              {chatType === MessageType.PRIVATE
-                ? (otherUserName ? otherUserName.charAt(0).toUpperCase() : 'U')
-                : '👥'}
+      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3.5">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onClose}
+            className="-ml-1 flex h-8 w-8 items-center justify-center rounded-sm text-gray-600 transition-colors hover:bg-gray-100"
+            title="Quay lại"
+          >
+            <span className="text-[20px] leading-none">←</span>
+          </button>
+          <div className="relative">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[12px] font-semibold text-gray-700">
+              {headerInitial}
             </div>
-          )}
-          <div style={styles.headerText}>
-            <div style={styles.headerTitle}>
-              {chatType === MessageType.PRIVATE ? otherUserName : classroomName}
-            </div>
-            <div style={styles.headerSubtitle}>
-              {chatType === MessageType.PRIVATE ? 'Direct Message' : 'Class Group'}
-            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-white bg-green-500" />
           </div>
+          <div className="text-[15px] font-semibold tracking-tight text-gray-900">{headerName}</div>
         </div>
-        {fullScreen ? (
-          <button style={styles.moreButton} title="Tùy chọn">⋮</button>
-        ) : (
-          <button onClick={onClose} style={styles.closeButton}>✕</button>
-        )}
+        <button className="flex h-8 w-8 items-center justify-center rounded-sm text-gray-600 transition-colors hover:bg-gray-100" title="Tùy chọn">
+          <span className="text-[20px] leading-none">⋮</span>
+        </button>
       </div>
 
       {/* Messages Area */}
-      <div
-        style={{
-          ...styles.messagesContainer,
-          ...(fullScreen ? styles.messagesContainerFullScreen : {})
-        }}
-      >
+      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-white px-3 py-3 [scrollbar-color:#ffffff_#ffffff] [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-white [&::-webkit-scrollbar-track]:bg-white [&::-webkit-scrollbar]:w-[6px]">
         {loading ? (
-          <div style={styles.loadingContainer}>
-            <div style={styles.loading}>Đang tải tin nhắn...</div>
+          <div className="flex h-full w-full items-center justify-center">
+            <div className="text-[12px] text-gray-500">Đang tải tin nhắn...</div>
+          </div>
+        ) : Object.keys(groupedMessages).length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center text-gray-400">
+            <div className="mb-3 text-3xl">💬</div>
+            <div className="text-xs">Chưa có tin nhắn nào</div>
           </div>
         ) : (
-          <>
-            {Object.keys(groupedMessages).length === 0 ? (
-              <div style={styles.emptyState}>
-                <div style={styles.emptyIcon}>💬</div>
-                <div style={styles.emptyText}>Chưa có tin nhắn nào</div>
-                <div style={styles.emptySubtext}>Hãy gửi tin nhắn đầu tiên!</div>
+          Object.keys(groupedMessages).map((dateKey) => (
+            <div key={dateKey}>
+              <div className="my-2 flex justify-center">
+                <span className="rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-gray-500">
+                  {dateKey}
+                </span>
               </div>
-            ) : (
-              Object.keys(groupedMessages).map((dateKey) => (
-                <div key={dateKey}>
-                  <div style={styles.dateDivider}>{dateKey}</div>
-                  {groupedMessages[dateKey].map((message) => {
-                    const isOwnMessage = message.senderId === currentUserId;
-                    return (
-                      <div
-                        key={message.id}
-                        style={{
-                          ...styles.messageWrapper,
-                          justifyContent: isOwnMessage ? 'flex-end' : 'flex-start'
-                        }}
-                      >
-                        <div
-                          style={{
-                            ...styles.messageBubble,
-                            ...(isOwnMessage ? styles.ownMessage : styles.otherMessage),
-                            position: 'relative'
-                          }}
-                          title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
-                        >
-                          {!isOwnMessage && chatType === MessageType.CLASS_GROUP && (
-                            <div style={styles.senderName}>{message.senderName}</div>
-                          )}
-                          {renderMessageContent(message)}
-                        </div>
+
+              {groupedMessages[dateKey].map((message, messageIndex) => {
+                const isOwnMessage = message.senderId === currentUserId;
+                const messagesInDay = groupedMessages[dateKey];
+                const previousMessage = messageIndex > 0 ? messagesInDay[messageIndex - 1] : null;
+                const currentTimestamp = getMessageTimestamp(message);
+                const previousTimestamp = previousMessage ? getMessageTimestamp(previousMessage) : Number.NaN;
+                const showMeta = !previousMessage || Number.isNaN(currentTimestamp) || Number.isNaN(previousTimestamp)
+                  ? true
+                  : (currentTimestamp - previousTimestamp) >= 10 * 60 * 1000;
+
+                return (
+                  <div key={message.id} className={`group flex max-w-[85%] flex-col ${isOwnMessage ? 'ml-auto items-end' : 'items-start'} mb-3`}>
+                    {showMeta && (
+                      <div className="mb-1 flex items-center gap-2">
+                        {!isOwnMessage && (
+                          <span className="text-[11px] font-semibold text-gray-800">
+                            {chatType === MessageType.CLASS_GROUP ? message.senderName : headerName}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-500">
+                          {formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
+                        </span>
+                        {isOwnMessage && <span className="text-[11px] font-semibold text-blue-600">You</span>}
                       </div>
-                    );
-                  })}
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </>
+                    )}
+
+                    <div
+                      className={`rounded-sm px-3 py-2 text-[15px] leading-relaxed shadow-sm ${isOwnMessage
+                        ? 'border border-blue-200 bg-blue-50 text-gray-800'
+                        : 'bg-gray-100 text-gray-800'
+                        }`}
+                      title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
+                    >
+                      {renderMessageContent(message)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
-      <div
-        style={{
-          ...styles.inputContainer,
-          ...(fullScreen ? styles.inputContainerFullScreen : {})
-        }}
-      >
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'image')}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          style={{ display: 'none' }}
-          onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'file')}
-        />
-        <button
-          style={styles.attachButton}
-          onClick={() => imageInputRef.current?.click()}
-          title="Gửi ảnh"
-          disabled={!isConnected}
-        >
-          <ImagePlus size={16} strokeWidth={2.2} />
-        </button>
-        <button
-          style={styles.attachButton}
-          onClick={() => fileInputRef.current?.click()}
-          title="Gửi file"
-          disabled={!isConnected}
-        >
-          <Paperclip size={16} strokeWidth={2.2} />
-        </button>
-        <textarea
-          ref={textareaRef}
-          value={newMessage}
-          onChange={handleInputChange}
-          onKeyPress={handleKeyPress}
-          style={styles.input}
-          disabled={!isConnected}
-          placeholder={pendingAttachment ? `Sẵn sàng gửi: ${pendingAttachment.name}` : 'Nhập tin nhắn...'}
-        />
-        <button
-          onClick={handleSendMessage}
-          disabled={!isConnected}
-          style={{
-            ...styles.sendButton,
-            ...(!isConnected ? styles.sendButtonDisabled : {})
-          }}
-          title={(newMessage.trim() || pendingAttachment) ? 'Gửi' : 'Thả tim'}
-        >
-          {(newMessage.trim() || pendingAttachment) ? (
-            <Send size={18} strokeWidth={2.5} />
-          ) : (
-            <ThumbsUp size={17} strokeWidth={2.5} />
-          )}
-        </button>
-      </div>
+      {isAiAssistantChat ? (
+        <div className="shrink-0 bg-white px-2.5 py-2.5">
+          <div className="rounded-xl border border-gray-200 bg-white px-2.5 py-2 shadow-[0_6px_20px_rgba(15,23,42,0.06)]">
+            {contextFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {contextFiles.map((filePath, index) => (
+                  <span
+                    key={`${filePath}-${index}`}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${index === 0 && filePath === activeFilePath
+                      ? 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-gray-50 text-gray-600'
+                      }`}
+                    title={filePath}
+                  >
+                    <File size={12} />
+                    <button
+                      type="button"
+                      onClick={() => handleOpenContextFile(filePath)}
+                      className="max-w-[180px] truncate text-left underline-offset-2 hover:underline"
+                      title={`Mo file: ${filePath}`}
+                    >
+                      {filePath}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeContextFile(filePath);
+                      }}
+                      className="rounded p-0.5 text-gray-500 transition hover:bg-gray-200 hover:text-gray-700"
+                      title="Bo file khoi context"
+                    >
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <textarea
+              ref={textareaRef}
+              value={newMessage}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              className="min-h-[36px] max-h-[110px] w-full resize-none border-0 bg-transparent px-1 py-0 text-[14px] leading-[20px] text-gray-900 placeholder:text-gray-400 outline-none [scrollbar-width:thin] [scrollbar-color:#d1d5db_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300"
+              disabled={false}
+              placeholder="Nhap tin nhan..."
+            />
+
+            <div className="-mt-2 flex items-center justify-between pt-0">
+              <button
+                type="button"
+                onClick={handlePickWorkspaceFile}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+                title="Them file trong workspace"
+              >
+                <Plus size={17} />
+              </button>
+
+              <button
+                onClick={handleSendMessage}
+                className={`flex h-8 w-8 items-center justify-center rounded-md transition ${newMessage.trim() ? 'text-gray-700 hover:bg-gray-100 hover:text-gray-900' : 'cursor-not-allowed text-gray-300'
+                  }`}
+                disabled={!newMessage.trim()}
+                title="Gui"
+              >
+                <Send size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative flex shrink-0 items-center gap-1.5 border-t border-gray-200 bg-white px-2.5 py-2.5">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'image')}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => handleFilePicked(e.target.files?.[0] || null, 'file')}
+          />
+
+          <div className="flex items-center">
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
+              onClick={() => imageInputRef.current?.click()}
+              title="Gửi ảnh"
+              disabled={!isConnected}
+            >
+              <ImagePlus size={19} strokeWidth={2.1} />
+            </button>
+            <button
+              className="flex h-9 w-9 items-center justify-center rounded-sm text-gray-500 transition-colors duration-150 hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
+              onClick={() => fileInputRef.current?.click()}
+              title="Gửi file"
+              disabled={!isConnected}
+            >
+              <Paperclip size={19} strokeWidth={2.1} />
+            </button>
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            value={newMessage}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className="h-[40px] min-h-[40px] max-h-[160px] flex-1 resize-none rounded-sm border-0 border-b border-gray-300 bg-gray-50 px-2.5 py-2 text-[14px] leading-[20px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-0"
+            disabled={!isConnected}
+            placeholder={pendingAttachment ? `Sẵn sàng gửi: ${pendingAttachment.name}` : 'Nhập tin nhắn...'}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={!isConnected}
+            className={`flex h-9 w-9 items-center justify-center rounded-sm p-0 transition-all duration-150 ${isConnected
+              ? 'cursor-pointer text-blue-600 hover:bg-blue-50 hover:text-blue-700'
+              : 'cursor-not-allowed text-gray-400'
+              }`}
+            title={(newMessage.trim() || pendingAttachment) ? 'Gửi' : 'Thả tim'}
+          >
+            {(newMessage.trim() || pendingAttachment) ? (
+              <Send size={20} strokeWidth={2.4} />
+            ) : (
+              <ThumbsUp size={19} strokeWidth={2.4} />
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
-};
-
-const styles: { [key: string]: React.CSSProperties } = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '500px',
-    width: '360px',
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-    overflow: 'hidden'
-  },
-  containerFullScreen: {
-    width: '100%',
-    maxWidth: '420px',
-    minHeight: '100vh',
-    height: '100vh',
-    borderRadius: 0,
-    boxShadow: 'none',
-    margin: '0 auto',
-    backgroundColor: '#ffffff'
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '10px 12px',
-    backgroundColor: '#ffffff',
-    color: '#111318',
-    borderBottom: '1px solid #e5e7eb'
-  },
-  headerInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px'
-  },
-  avatar: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    backgroundColor: '#ffffff',
-    color: '#007acc',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '18px',
-    fontWeight: 'bold'
-  },
-  headerText: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  headerTitle: {
-    fontSize: '14px',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em'
-  },
-  headerSubtitle: {
-    fontSize: '10px',
-    color: '#6b7280',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em'
-  },
-  backButton: {
-    background: 'transparent',
-    border: 'none',
-    color: '#111318',
-    fontSize: '22px',
-    cursor: 'pointer',
-    width: '32px',
-    height: '32px',
-    lineHeight: '1'
-  },
-  moreButton: {
-    background: 'transparent',
-    border: 'none',
-    color: '#111318',
-    fontSize: '20px',
-    cursor: 'pointer',
-    width: '32px',
-    height: '32px',
-    lineHeight: '1'
-  },
-  closeButton: {
-    background: 'none',
-    border: 'none',
-    color: '#ffffff',
-    fontSize: '24px',
-    cursor: 'pointer',
-    padding: '4px 8px',
-    lineHeight: '1'
-  },
-  messagesContainer: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '16px',
-    backgroundColor: '#fafafa'
-  },
-  messagesContainerFullScreen: {
-    paddingBottom: '88px'
-  },
-  loadingContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100%'
-  },
-  loading: {
-    color: '#666666',
-    fontSize: '14px'
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#999999'
-  },
-  emptyIcon: {
-    fontSize: '48px',
-    marginBottom: '16px'
-  },
-  emptyText: {
-    fontSize: '16px',
-    fontWeight: '600',
-    marginBottom: '8px'
-  },
-  emptySubtext: {
-    fontSize: '14px'
-  },
-  dateDivider: {
-    textAlign: 'center',
-    color: '#999999',
-    fontSize: '12px',
-    margin: '16px 0',
-    position: 'relative'
-  },
-  messageWrapper: {
-    display: 'flex',
-    marginBottom: '12px'
-  },
-  messageBubble: {
-    maxWidth: '70%',
-    padding: '10px 14px',
-    borderRadius: '12px',
-    wordWrap: 'break-word'
-  },
-  ownMessage: {
-    backgroundColor: '#007acc',
-    color: '#ffffff',
-    borderBottomRightRadius: '4px'
-  },
-  otherMessage: {
-    backgroundColor: '#ffffff',
-    color: '#333333',
-    borderBottomLeftRadius: '4px',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-  },
-  senderName: {
-    fontSize: '11px',
-    fontWeight: '600',
-    marginBottom: '4px',
-    color: '#007acc'
-  },
-  messageContent: {
-    fontSize: '14px',
-    lineHeight: '1.4',
-    whiteSpace: 'pre-wrap'
-  },
-  attachmentWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px'
-  },
-  attachmentImage: {
-    maxWidth: '220px',
-    maxHeight: '220px',
-    borderRadius: '10px',
-    objectFit: 'cover'
-  },
-  attachmentName: {
-    fontSize: '11px',
-    opacity: 0.8
-  },
-  fileLink: {
-    color: 'inherit',
-    textDecoration: 'underline',
-    fontWeight: 600,
-    fontSize: '13px'
-  },
-  fileLinkInner: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px'
-  },
-  readStatus: {
-    fontSize: '11px',
-    marginLeft: '4px',
-    opacity: 0.6
-  },
-  inputContainer: {
-    display: 'flex',
-    padding: '8px 12px',
-    gap: '6px',
-    backgroundColor: '#ffffff'
-  },
-  inputContainerFullScreen: {
-    position: 'fixed',
-    bottom: 0,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: '100%',
-    maxWidth: '420px',
-    zIndex: 30,
-    backgroundColor: '#ffffff'
-  },
-  input: {
-    flex: 1,
-    padding: '7px 12px',
-    border: '1px solid #e4e6eb',
-    borderRadius: '20px',
-    fontSize: '15px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    color: '#111318',
-    backgroundColor: '#ffffff',
-    caretColor: '#111318',
-    opacity: 1,
-    resize: 'none',
-    outline: 'none',
-    height: '32px',
-    minHeight: '32px',
-    maxHeight: '100px',
-    lineHeight: '18px',
-    overflowY: 'hidden'
-  },
-  attachButton: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '50%',
-    border: 'none',
-    backgroundColor: '#f3f4f6',
-    color: '#111318',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  sendButton: {
-    padding: '0',
-    width: '32px',
-    height: '32px',
-    backgroundColor: '#0084ff',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '50%',
-    fontSize: '14px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s, transform 0.1s',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#cccccc',
-    cursor: 'not-allowed'
-  }
 };
 
 export default ChatWindow;
