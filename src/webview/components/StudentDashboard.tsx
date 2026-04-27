@@ -6,6 +6,7 @@ import StudentForm from './StudentForm';
 import AssignmentList from './AssignmentList';
 import BottomNavigation from './BottomNavigation';
 import NotificationView from './NotificationView';
+import Settings from './Setting';
 import ChatView from './ChatView';
 import ChatWindow from './ChatWindow';
 import { MessageType } from '../services/websocketService';
@@ -132,7 +133,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   useEffect(() => {
     // Request current workspace info from extension
     vscode.postMessage({ type: 'getCurrentWorkspace' });
-    
+
     // Listen for messages from extension
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
@@ -156,7 +157,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
     };
 
     window.addEventListener('message', handleMessage);
-    
+
     // Load classes on mount
     vscode.postMessage({ type: 'loadMyClasses' });
 
@@ -164,8 +165,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   }, [vscode]);
 
   const handleLeaveClass = (classItem: ClassItem) => {
-    vscode.postMessage({ 
-      type: 'leaveClass', 
+    vscode.postMessage({
+      type: 'leaveClass',
       classCode: classItem.classCode,
       className: classItem.className
     });
@@ -179,7 +180,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
-          <StudentForm 
+          <StudentForm
             vscode={vscode}
             user={user}
             onClose={() => {
@@ -209,9 +210,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
               <div className="w-px h-4 bg-[#dbdfe6]"></div>
-              <button 
+              <button
                 onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors" 
+                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
                 title="Đăng xuất"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -262,6 +263,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                 setNotificationTargetAssignmentData(undefined);
               }}
               onViewChange={(isDetailView) => setIsViewingAssignmentDetail(isDetailView)}
+              user={user}
             />
           </div>
 
@@ -274,8 +276,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
 
   if (selectedClass) {
     return (
-      <StudentList 
-        vscode={vscode} 
+      <StudentList
+        vscode={vscode}
         classItem={selectedClass}
         currentUser={user}
         userRole="STUDENT"
@@ -284,62 +286,51 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
-        {/* Header */}
-        {!isChatDetailOpen && (
-        <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
-                <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-              </svg>
-            </div>
-            <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
-            <div className="w-px h-4 bg-[#dbdfe6]"></div>
-            <button 
-              onClick={() => vscode.postMessage({ type: 'logout' })}
-              className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors" 
-              title="Đăng xuất"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </header>
-        )}
-
-        {activeTab === 'chat' ? (
-          chatOpen && chatConfig ? (
-            <ChatWindow
-              vscode={vscode}
-              apiService={apiService}
-              currentUserId={parseInt(user.userId)}
-              currentUserName={user.name}
-              otherUserId={chatConfig.otherUserId}
-              otherUserName={chatConfig.otherUserName}
-              classroomId={chatConfig.classroomId}
-              classroomName={chatConfig.classroomName}
-              chatType={chatConfig.chatType}
-              onClose={() => setChatOpen(false)}
-              fullScreen={true}
-            />
-          ) : (
-            <ChatView
-              vscode={vscode}
-              currentUser={user}
-              onOpenChat={handleOpenChat}
-              onChatClosed={() => setChatOpen(false)}
-            />
-          )
-        ) : activeTab === 'notification' ? (
-          <NotificationView vscode={vscode} onNotificationAction={handleNotificationAction} />
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'chat':
+        return chatOpen && chatConfig ? (
+          <ChatWindow
+            vscode={vscode}
+            apiService={apiService}
+            currentUserId={Number(user?.userId ?? user?.id)}
+            currentUserName={user.name}
+            otherUserId={chatConfig.otherUserId}
+            otherUserName={chatConfig.otherUserName}
+            classroomId={chatConfig.classroomId}
+            classroomName={chatConfig.classroomName}
+            chatType={chatConfig.chatType}
+            onClose={() => setChatOpen(false)}
+            fullScreen={true}
+          />
         ) : (
+          <ChatView
+            vscode={vscode}
+            currentUser={user}
+            onOpenChat={handleOpenChat}
+            onChatClosed={() => setChatOpen(false)}
+          />
+        );
+
+      case 'notification':
+        return (
+          <NotificationView
+            vscode={vscode}
+            onNotificationAction={handleNotificationAction}
+          />
+        );
+
+      case 'settings':
+        return (
+          <Settings
+            vscode={vscode}
+            user={user}
+          />
+        );
+
+      case 'dashboard':
+      default:
+        return (
           <>
             {/* Page Heading */}
             <div className="pt-8 px-6 pb-6 border-b border-[#dbdfe6]">
@@ -368,11 +359,11 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
               <section className="px-6">
                 <div className="flex items-center justify-between pb-4">
                   <h3 className="text-lg font-bold leading-tight tracking-tight text-[#111318]">
-                    Lớp học của tôi ({classes.length})
+                    Lớp học của tôi ({classes?.length || 0})
                   </h3>
                 </div>
 
-                {classes.length === 0 ? (
+                {!classes || classes.length === 0 ? (
                   <div className="text-center py-12">
                     <p className="text-[#616f89] mb-6 text-sm">Bạn chưa tham gia lớp học nào</p>
                     <button
@@ -384,14 +375,14 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {classes.map((classItem) => (
+                    {classes.map((classItem: any) => (
                       <div
                         key={classItem.classId}
                         onClick={() => {
                           setSelectedClass(classItem);
                           setViewAssignments(true);
                         }}
-                        className="group relative flex items-center justify-between p-4 bg-white border border-[#dbdfe6] rounded-xl hover:border-[#135bec] transition-colors cursor-pointer"
+                        className="group relative flex items-center justify-between p-4 bg-white rounded-2xl shadow-[0_8px_24px_rgba(17,19,24,0.10)] hover:shadow-[0_12px_30px_rgba(17,19,24,0.14)] transition-all cursor-pointer"
                       >
                         <div className="flex flex-col gap-1">
                           <span className="text-xs font-bold text-[#616f89] uppercase tracking-widest">
@@ -424,7 +415,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
               </section>
 
               {/* Activity Section */}
-              {classes.length > 0 && (
+              {classes && classes.length > 0 && (
                 <section className="px-6">
                   <CommitHeatmap apiService={apiService} vscode={vscode} />
                 </section>
@@ -438,7 +429,42 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
               </span>
             </footer>
           </>
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+
+        {/* Header */}
+        {!isChatDetailOpen && (
+          <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+                  <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
+                </svg>
+              </div>
+              <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
+              <div className="w-px h-4 bg-[#dbdfe6]"></div>
+              <button
+                onClick={() => vscode.postMessage({ type: 'logout' })}
+                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
+                title="Đăng xuất"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          </header>
         )}
+
+        {renderContent()}
 
         {/* Bottom Navigation */}
         {!isChatDetailOpen && (

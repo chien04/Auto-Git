@@ -75,7 +75,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
     // Set up message listener FIRST
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
-      
+
       if (message && message.type === 'chatClassroomsLoaded') {
         console.log('[ChatView] ✓ Received chatClassroomsLoaded');
         if (Array.isArray(message.classes)) {
@@ -106,12 +106,12 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         refreshData();
       }
     };
-    
+
     window.addEventListener('message', handleMessage);
-    
+
     // THEN load data after listener is ready
     loadData();
-    
+
     return () => {
       window.removeEventListener('message', handleMessage);
     };
@@ -212,16 +212,16 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   // Filter chats based on search query
   const filteredClassrooms = searchQuery.trim()
     ? classrooms.filter(classroom =>
-        classroom.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        classroom.classCode.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      classroom.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      classroom.classCode.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : classrooms;
 
   const filteredPrivateChats = searchQuery.trim()
     ? recentPrivateChats.filter(chat =>
-        chat.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        chat.userEmail.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      chat.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      chat.userEmail.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : recentPrivateChats;
 
   const isSearchMode = isSearchFocused || searchQuery.trim().length > 0;
@@ -240,7 +240,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
+
     if (days === 0) {
       return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     } else if (days === 1) {
@@ -260,16 +260,16 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Search Box - Right below header */}
-      <div className="px-4 py-3 border-b border-[#dbdfe6]">
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      {/* Search Section - Styled strictly like the mockup */}
+      <div className="px-4 py-4">
         <div className="relative flex items-center">
-          <svg className="absolute left-3 w-[18px] h-[18px] text-[#9ca3af]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-3 w-[18px] h-[18px] text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
-            className="w-full bg-[#f7f7f7] border-none rounded-lg py-2.5 pl-10 pr-4 text-xs focus:ring-1 focus:ring-[#135bec] placeholder-[#9ca3af] transition-all outline-none"
+            className="w-full bg-[#fafafa] border-none rounded-full py-2.5 pl-10 pr-4 text-sm font-medium focus:ring-1 focus:ring-black placeholder:text-neutral-400 outline-none transition-all"
             placeholder="Search conversations..."
             value={searchQuery}
             onFocus={() => setIsSearchFocused(true)}
@@ -278,7 +278,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
           />
           {searchQuery && (
             <button
-              className="absolute right-3 text-[#9ca3af] hover:text-[#111318]"
+              className="absolute right-3 text-neutral-400 hover:text-black transition-colors"
               onClick={() => {
                 setSearchQuery('');
                 setIsSearchFocused(true);
@@ -292,161 +292,181 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         </div>
       </div>
 
-      {/* Chat List */}
-      <main className="flex-1 overflow-y-auto bg-white pb-28">
+      {/* Chat List Layout */}
+      <main className="w-full bg-white flex-grow flex flex-col pb-28 overflow-y-auto custom-scrollbar">
         {isSearchMode ? (
           isSearching ? (
             <div className="text-center py-12">
-              <p className="text-[#616f89] text-sm">Đang tìm người dùng...</p>
+              <p className="text-neutral-500 text-sm font-medium">Đang tìm người dùng...</p>
             </div>
           ) : searchResults.length > 0 ? (
-            searchResults.map((member) => (
-              <div
-                key={`search-${member.userId}`}
-                className="flex items-center gap-3 px-4 py-4 hover:bg-[#fafafa] cursor-pointer border-b border-[#f7f7f7]"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  handleOpenSearchResult(member);
-                }}
-              >
-                <div className="w-12 h-12 rounded-full bg-[#9b59b6] flex items-center justify-center text-white text-xs font-bold shrink-0">
-                  {getInitials(member.userName)}
-                </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <div className="flex items-center gap-2 overflow-hidden mb-0.5">
-                    <p className="text-[14px] font-semibold truncate text-[#111318]">{member.userName}</p>
-                    <span className="px-1.5 py-0.5 rounded bg-[#f7f7f7] text-[10px] font-medium text-[#616f89] uppercase tracking-tighter">
-                      {member.role}
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-[#616f89] truncate">{member.className || 'Direct message'}</p>
-                </div>
+            <div className="flex-grow">
+              <div className="px-4 py-2 bg-[#fafafa]">
+                <h2 className="font-bold text-[10px] tracking-widest uppercase text-neutral-500">Kết quả tìm kiếm</h2>
               </div>
-            ))
+              <div className="divide-y divide-neutral-50">
+                {searchResults.map((member) => (
+                  <div
+                    key={`search-${member.userId}`}
+                    className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleOpenSearchResult(member);
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-neutral-200 flex items-center justify-center rounded-full shrink-0">
+                        <span className="font-extrabold text-neutral-600 text-sm">
+                          {getInitials(member.userName)}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-black tracking-tight">{member.userName}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">
+                            {member.role}
+                          </span>
+                        </div>
+                        <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">{member.className || 'Direct message'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-[#616f89] text-sm">
+              <p className="text-neutral-500 text-sm font-medium">
                 {searchQuery.trim() ? 'Không tìm thấy người dùng' : 'Nhập tên hoặc email để tìm người dùng'}
               </p>
             </div>
           )
         ) : (
-          /* Class Group Chats and Private Chats */
-          <>
-              <>
-                {/* Merge and sort all chats by time */}
-                {(() => {
-                  const aiItem = {
-                    ...AI_ASSISTANT,
-                    userEmail: 'ai-assistant@system',
-                    lastMessage: aiPreview.lastMessage,
-                    lastMessageTime: aiPreview.lastMessageTime,
-                    type: 'private',
-                    time: aiPreview.lastMessageTime
-                  };
+          /* Normal Chat List */
+          <div className="flex-grow">
+            <div className="px-4 py-2 bg-[#fafafa]">
+              <h2 className="font-bold text-[10px] tracking-widest uppercase text-neutral-500">Tất cả</h2>
+            </div>
 
-                  const merged = [
-                    aiItem,
-                    ...classrooms.map(c => {
-                      const preview = classPreviews[c.id] || {};
-                      const latestTime = preview.lastMessageTime || c.lastMessageTime;
-                      return {
-                        ...c,
-                        type: 'group',
-                        lastMessage: preview.lastMessage || c.lastMessage,
-                        lastMessageTime: latestTime,
-                        time: latestTime
-                      };
-                    }),
-                    ...recentPrivateChats.map(c => ({
+            <div className="divide-y divide-neutral-50">
+              {(() => {
+                const aiItem = {
+                  ...AI_ASSISTANT,
+                  userEmail: 'ai-assistant@system',
+                  lastMessage: aiPreview.lastMessage,
+                  lastMessageTime: aiPreview.lastMessageTime,
+                  type: 'private',
+                  time: aiPreview.lastMessageTime
+                };
+
+                const merged = [
+                  aiItem,
+                  ...classrooms.map(c => {
+                    const preview = classPreviews[c.id] || {};
+                    const latestTime = preview.lastMessageTime || c.lastMessageTime;
+                    return {
                       ...c,
-                      type: 'private',
-                      time: c.lastMessageTime
-                    }))
-                  ];
-                  
-                  const sorted = merged.sort((a: any, b: any) => {
-                    if (!a.time && !b.time) return 0;
-                    if (!a.time) return 1;
-                    if (!b.time) return -1;
-                    return new Date(b.time).getTime() - new Date(a.time).getTime();
-                  });
-                  
-                  return sorted;
-                })()
-                  .map((chat: any) => {
-                    if (chat.type === 'group') {
-                      return (
-                        <div
-                          key={`group-${chat.id}`}
-                          className="flex items-center gap-3 px-4 py-4 hover:bg-[#fafafa] cursor-pointer border-b border-[#f7f7f7]"
-                          onClick={() => handleOpenGroupChat(chat)}
-                        >
-                          <div className="relative shrink-0">
-                            <div className="w-12 h-12 rounded-lg bg-[#111318] flex items-center justify-center text-white text-xs font-bold">
+                      type: 'group',
+                      lastMessage: preview.lastMessage || c.lastMessage,
+                      lastMessageTime: latestTime,
+                      time: latestTime
+                    };
+                  }),
+                  ...recentPrivateChats.map(c => ({
+                    ...c,
+                    type: 'private',
+                    time: c.lastMessageTime
+                  }))
+                ];
+
+                const sorted = merged.sort((a: any, b: any) => {
+                  if (!a.time && !b.time) return 0;
+                  if (!a.time) return 1;
+                  if (!b.time) return -1;
+                  return new Date(b.time).getTime() - new Date(a.time).getTime();
+                });
+
+                return sorted.map((chat: any) => {
+                  if (chat.type === 'group') {
+                    // GROUP CHAT ITEM
+                    return (
+                      <div
+                        key={`group-${chat.id}`}
+                        className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                        onClick={() => handleOpenGroupChat(chat)}
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-12 h-12 bg-black flex items-center justify-center rounded-full shrink-0">
+                            <span className="font-extrabold text-white text-xs uppercase tracking-tighter">
                               {getInitials(chat.className)}
-                            </div>
+                            </span>
                           </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-0.5">
-                              <p className="text-[14px] font-semibold truncate text-[#111318]">{chat.className}</p>
-                              {chat.lastMessageTime && (
-                                <span className="text-[10px] text-[#9ca3af]">{formatTime(chat.lastMessageTime)}</span>
-                              )}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <p className="text-[12px] text-[#616f89] truncate font-medium">
-                                {chat.lastMessage || `Class Group • ${chat.studentCount} members`}
-                              </p>
-                              {chat.unreadCount && chat.unreadCount > 0 && (
-                                <div className="w-2 h-2 rounded-full bg-[#111318] shrink-0"></div>
-                              )}
-                            </div>
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="font-bold text-sm text-black tracking-tight truncate">
+                              {chat.className}
+                            </span>
+                            <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">
+                              {chat.lastMessage || `Class Group • ${chat.studentCount} members`}
+                            </span>
                           </div>
                         </div>
-                      );
-                    } else {
-                      const isAI = chat.userId === AI_ASSISTANT_ID;
-                      return (
-                        <div
-                          key={`private-${chat.userId}`}
-                          className="flex items-start gap-3 px-4 py-4 hover:bg-[#fafafa] cursor-pointer border-b border-[#f7f7f7]"
-                          onClick={() => handleOpenPrivateChat(chat)}
-                        >
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 ${
-                            isAI ? 'bg-[#4b5563] flex items-center justify-center' : 'bg-[#9b59b6]'
-                          }`}>
-                            {isAI ? <Bot size={24} /> : getInitials(chat.userName)}
-                          </div>
-                          <div className="flex flex-col flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 overflow-hidden mb-0.5">
-                                <p className="text-[14px] font-semibold truncate text-[#111318]">{chat.userName}</p>
-                                {!isAI && (
-                                  <span className="px-1.5 py-0.5 rounded bg-[#111318] text-[10px] font-medium text-white uppercase tracking-tighter">
-                                    Student
-                                  </span>
-                                )}
-                              </div>
-                              {chat.lastMessageTime && (
-                                <span className="text-[10px] text-[#9ca3af]">{formatTime(chat.lastMessageTime)}</span>
-                              )}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="font-medium text-[10px] tracking-tight text-neutral-400 uppercase">
+                            {formatTime(chat.lastMessageTime) || 'MỚI'}
+                          </span>
+                          {chat.unreadCount && chat.unreadCount > 0 ? (
+                            <div className="w-2 h-2 bg-black rounded-full"></div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    // PRIVATE CHAT ITEM & AI
+                    const isAI = chat.userId === AI_ASSISTANT_ID;
+                    return (
+                      <div
+                        key={`private-${chat.userId}`}
+                        className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                        onClick={() => handleOpenPrivateChat(chat)}
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          {isAI ? (
+                            <div className="w-12 h-12 border-2 border-black flex items-center justify-center rounded-full shrink-0">
+                              <Bot size={22} className="text-black" />
                             </div>
-                            <div className="flex items-center justify-between">
-                              <p className="text-[12px] text-[#616f89] truncate font-medium">
-                                {chat.lastMessage || 'Bắt đầu trò chuyện'}
-                              </p>
-                              {chat.unreadCount && chat.unreadCount > 0 && (
-                                <div className="w-2 h-2 rounded-full bg-[#111318] shrink-0"></div>
-                              )}
+                          ) : (
+                            <div className="w-12 h-12 bg-[#f0f0f0] flex items-center justify-center rounded-full overflow-hidden shrink-0">
+                              <span className="font-extrabold text-neutral-600 text-sm">
+                                {getInitials(chat.userName)}
+                              </span>
                             </div>
+                          )}
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-black tracking-tight truncate">
+                                {chat.userName}
+                              </span>
+                            </div>
+                            <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">
+                              {chat.lastMessage || 'Bắt đầu trò chuyện'}
+                            </span>
                           </div>
                         </div>
-                      );
-                    }
-                  })}
-              </>
-          </>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="font-medium text-[10px] tracking-tight text-neutral-400 uppercase">
+                            {formatTime(chat.lastMessageTime) || 'MỚI'}
+                          </span>
+                          {chat.unreadCount && chat.unreadCount > 0 ? (
+                            <div className="w-2 h-2 bg-black rounded-full"></div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  }
+                });
+              })()}
+            </div>
+          </div>
         )}
       </main>
     </div>

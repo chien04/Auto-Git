@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChatMessage, MessageType, getWebSocketService } from '../services/websocketService';
 import { Plus, Send, ThumbsUp, File, X, ImagePlus, Paperclip, Check, CheckCheck, Copy } from 'lucide-react';
 import { ApiService } from '../../services/apiService';
@@ -58,11 +58,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const wsService = getWebSocketService();
   const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const aiStreamingMessageIdRef = useRef<number | null>(null);
+  const aiDoneTimerRef = useRef<NodeJS.Timeout | null>(null);
   const copyCodeResetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
   const [copiedCodeBlockId, setCopiedCodeBlockId] = useState<string | null>(null);
 
   const ATTACHMENT_PREFIX = '__ATTACHMENT__:';
-  const isAiAssistantChat = chatType === MessageType.PRIVATE && otherUserId === AI_ASSISTANT_ID;
+  const normalizedOtherUserId = typeof otherUserId === 'number' ? otherUserId : Number(otherUserId);
+  const hasValidOtherUserId = Number.isFinite(normalizedOtherUserId);
+  const isAiAssistantChat = chatType === MessageType.PRIVATE && hasValidOtherUserId && normalizedOtherUserId === AI_ASSISTANT_ID;
 
   const handleCopyCodeBlock = async (codeText: string, blockId: string) => {
     if (!codeText) {
@@ -84,7 +88,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
-  const aiMarkdownComponents = {
+  const aiMarkdownComponents = useMemo(() => ({
     h1: ({ children }: { children?: React.ReactNode }) => (
       <h1 className="mb-2 text-[16px] font-semibold leading-6">{children}</h1>
     ),
@@ -130,18 +134,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               {copiedCodeBlockId === codeBlockId ? <Check size={14} strokeWidth={2.2} /> : <Copy size={14} strokeWidth={2.2} />}
             </button>
           </div>
-          <pre className="overflow-x-auto px-3 py-2 text-[14px] leading-6 text-[#111827]">
+          <pre className="overflow-x-hidden whitespace-pre-wrap break-words px-3 py-2 text-[14px] leading-6 text-[#111827]">
             <code className={`${className} bg-transparent`}>{rawCode}</code>
           </pre>
         </div>
       );
     },
     code: ({ children }: { children?: React.ReactNode }) => (
-      <code className="rounded-md bg-[#eceff4] px-1.5 py-0.5 font-mono text-[0.92em] text-[#111827]">
+      <code className="break-words rounded-md bg-[#eceff4] px-1.5 py-0.5 font-mono text-[0.92em] text-[#111827]">
         {children}
       </code>
     )
-  };
+  }), [copiedCodeBlockId]);
 
   const encodeAttachment = (payload: AttachmentPayload): string => {
     return `${ATTACHMENT_PREFIX}${JSON.stringify(payload)}`;
@@ -199,6 +203,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       if (copyCodeResetTimerRef.current) {
         clearTimeout(copyCodeResetTimerRef.current);
       }
+
+      if (resizeFrameRef.current !== null) {
+        cancelAnimationFrame(resizeFrameRef.current);
+      }
+
+      if (aiDoneTimerRef.current) {
+        clearTimeout(aiDoneTimerRef.current);
+      }
     };
   }, []);
 
@@ -207,12 +219,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     // Set up listener for message history responses
     const handleMessage = (event: MessageEvent) => {
       const msg = event.data;
-      if (msg && msg.type === 'privateMessagesLoaded' && msg.otherUserId === otherUserId) {
+      if (msg && msg.type === 'privateMessagesLoaded' && Number(msg.otherUserId) === normalizedOtherUserId) {
         const data: ChatMessage[] = msg.messages || [];
         setMessages(data);
         setLoading(false);
         // Mark unread messages as read
-        const unread = data.filter((m: any) => m.senderId === otherUserId && !m.isRead);
+        const unread = data.filter((m: any) => Number(m.senderId) === normalizedOtherUserId && !m.isRead);
         for (const m of unread) { markAsRead(m.id); }
         if (unread.length > 0) { window.parent.postMessage({ type: 'newMessage' }, '*'); }
       } else if (msg && msg.type === 'classMessagesLoaded' && msg.classroomId === classroomId) {
@@ -262,7 +274,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       window.removeEventListener('message', handleMessage);
       clearTimeout(loadingTimeout);
     };
-  }, [otherUserId, classroomId, isAiAssistantChat]);
+  }, [otherUserId, classroomId, isAiAssistantChat, normalizedOtherUserId]);
 
   // Subscribe to WebSocket messages via GLOBAL LISTENER (no direct subscription)
   useEffect(() => {
@@ -280,10 +292,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.log('[ChatWindow] Current chat with:', otherUserId, 'type:', chatType);
 
       // Filter messages based on chat type
-      if (chatType === MessageType.PRIVATE && otherUserId) {
+      if (chatType === MessageType.PRIVATE && hasValidOtherUserId) {
         // Only add messages from/to this chat partner
-        const isFromOther = message.senderId === otherUserId;
-        const isToOther = message.receiverId === otherUserId && message.senderId === currentUserId;
+        const isFromOther = Number(message.senderId) === normalizedOtherUserId;
+        const isToOther = Number(message.receiverId) === normalizedOtherUserId && Number(message.senderId) === currentUserId;
 
         console.log('[ChatWindow] isFromOther:', isFromOther, 'isToOther:', isToOther);
 
@@ -304,7 +316,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             if (isToOther) {
               const optimisticIndex = prev.findIndex(m =>
                 m.senderId === currentUserId &&
-                m.receiverId === otherUserId &&
+                Number(m.receiverId) === normalizedOtherUserId &&
                 m.content === message.content &&
                 m.id > Date.now() - 5000
               );
@@ -380,7 +392,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       console.log('[ChatWindow] Cleaning up global message listener');
       removeListener();
     };
-  }, [currentUserId, otherUserId, classroomId, chatType, isConnected]);
+  }, [currentUserId, otherUserId, classroomId, chatType, isConnected, hasValidOtherUserId, normalizedOtherUserId]);
 
   // Ensure class-topic subscription exists while a class chat is open
   useEffect(() => {
@@ -406,8 +418,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const loadMessageHistory = () => {
     setLoading(true);
-    if (chatType === MessageType.PRIVATE && otherUserId) {
-      vscode.postMessage({ type: 'getPrivateMessages', otherUserId });
+    if (chatType === MessageType.PRIVATE && hasValidOtherUserId) {
+      vscode.postMessage({ type: 'getPrivateMessages', otherUserId: normalizedOtherUserId });
     } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
       vscode.postMessage({ type: 'getClassMessages', classroomId });
     } else {
@@ -436,10 +448,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     try {
       // Create optimistic message for immediate display
       const optimisticMessage: ChatMessage = {
-        id: Date.now(), // Temporary ID
+        id: Date.now() + Math.floor(Math.random() * 1000), // Temporary ID
         senderId: currentUserId,
         senderName: currentUserName,
-        receiverId: otherUserId,
+        receiverId: hasValidOtherUserId ? normalizedOtherUserId : undefined,
         classroomId: classroomId,
         content: payloadContent,
         messageType: chatType,
@@ -452,13 +464,30 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       // Send via REST for AI assistant, otherwise normal WebSocket chat
       if (isAiAssistantChat) {
+        // Create one dedicated AI response bubble for this prompt.
+        const aiResponseId = Date.now() + Math.floor(Math.random() * 1000) + 1;
+        aiStreamingMessageIdRef.current = aiResponseId;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: aiResponseId,
+            senderId: AI_ASSISTANT_ID,
+            senderName: otherUserName || 'AI Assistant',
+            receiverId: currentUserId,
+            content: '',
+            type: MessageType.PRIVATE,
+            isRead: true,
+            sentAt: new Date().toISOString()
+          }
+        ]);
+
         vscode.postMessage({
           type: 'askAiWithContext',
           message: payloadContent,
           contextFiles
         });
-      } else if (chatType === MessageType.PRIVATE && otherUserId) {
-        wsService.sendPrivateMessage(otherUserId, payloadContent);
+      } else if (chatType === MessageType.PRIVATE && hasValidOtherUserId) {
+        wsService.sendPrivateMessage(normalizedOtherUserId, payloadContent);
       } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
         wsService.sendClassMessage(classroomId, payloadContent);
       }
@@ -509,8 +538,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         return;
       }
 
-      if (chunk === AI_STREAM_DONE) {
-        aiStreamingMessageIdRef.current = null;
+      if (aiDoneTimerRef.current) {
+        clearTimeout(aiDoneTimerRef.current);
+        aiDoneTimerRef.current = null;
+      }
+
+      const normalizedChunk = String(chunk).trim();
+      if (
+        normalizedChunk === AI_STREAM_DONE ||
+        normalizedChunk === 'DONE' ||
+        normalizedChunk === '[DONE]' ||
+        normalizedChunk === '__END__'
+      ) {
+        // Some backends can emit done markers before the final chunks arrive.
+        // Delay stream reset slightly so trailing chunks stay in the same bubble.
+        aiDoneTimerRef.current = setTimeout(() => {
+          aiStreamingMessageIdRef.current = null;
+          aiDoneTimerRef.current = null;
+        }, 700);
         return;
       }
 
@@ -524,6 +569,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             ...prev,
             {
               id: newId,
+              senderId: AI_ASSISTANT_ID,
+              senderName: otherUserName || 'AI Assistant',
+              receiverId: currentUserId,
+              content: chunk,
+              type: MessageType.PRIVATE,
+              isRead: true,
+              sentAt: new Date().toISOString()
+            }
+          ];
+        }
+
+        const targetMessage = prev.find((msg) => msg.id === streamingId);
+        if (!targetMessage) {
+          // Recreate missing target bubble with the same stream id.
+          return [
+            ...prev,
+            {
+              id: streamingId,
               senderId: AI_ASSISTANT_ID,
               senderName: otherUserName || 'AI Assistant',
               receiverId: currentUserId,
@@ -551,7 +614,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     });
 
     return () => {
-      aiStreamingMessageIdRef.current = null;
+      if (aiDoneTimerRef.current) {
+        clearTimeout(aiDoneTimerRef.current);
+        aiDoneTimerRef.current = null;
+      }
       if (unsubscribe) {
         unsubscribe();
       }
@@ -571,12 +637,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     }
     setNewMessage(e.target.value);
 
-    // Auto-resize textarea like Messenger
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '32px';
-      const scrollHeight = textareaRef.current.scrollHeight;
-      textareaRef.current.style.height = Math.min(scrollHeight, 100) + 'px';
+    // Auto-resize textarea like Messenger without blocking key input.
+    if (resizeFrameRef.current !== null) {
+      cancelAnimationFrame(resizeFrameRef.current);
     }
+    resizeFrameRef.current = requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = '32px';
+        const scrollHeight = textareaRef.current.scrollHeight;
+        textareaRef.current.style.height = Math.min(scrollHeight, 100) + 'px';
+      }
+      resizeFrameRef.current = null;
+    });
   };
 
   const handlePickWorkspaceFile = () => {
@@ -616,7 +688,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const renderMessageContent = (message: ChatMessage) => {
+  const renderMessageContent = useCallback((message: ChatMessage) => {
     const attachment = decodeAttachment(message.content);
     if (!attachment) {
       const isAiMessage = isAiAssistantChat && message.senderId === AI_ASSISTANT_ID;
@@ -636,7 +708,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       }
 
       return (
-        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
+        <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
           {message.content}
           {message.senderId === currentUserId && (
             <span className="ml-1 inline-flex items-center text-blue-600">
@@ -666,7 +738,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         </a>
       </div>
     );
-  };
+  }, [currentUserId, isAiAssistantChat, otherUserName, aiMarkdownComponents]);
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -696,23 +768,94 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     return new Date(value).getTime();
   };
 
-  // Group messages by date
-  const groupedMessages: { [key: string]: ChatMessage[] } = {};
-  messages.forEach((msg) => {
-    const dateKey = formatDate(msg.createdAt || msg.sentAt || new Date().toISOString());
-    if (!groupedMessages[dateKey]) {
-      groupedMessages[dateKey] = [];
-    }
-    groupedMessages[dateKey].push(msg);
-  });
+  const groupedMessages = useMemo(() => {
+    const grouped: { [key: string]: ChatMessage[] } = {};
+    messages.forEach((msg) => {
+      const dateKey = formatDate(msg.createdAt || msg.sentAt || new Date().toISOString());
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
+      grouped[dateKey].push(msg);
+    });
+    return grouped;
+  }, [messages]);
 
   const headerName = chatType === MessageType.PRIVATE ? (otherUserName || 'Unknown') : (classroomName || 'Class Group');
   const headerInitial = headerName.charAt(0).toUpperCase();
+  const groupedDateKeys = useMemo(() => Object.keys(groupedMessages), [groupedMessages]);
+
+  const renderedMessages = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="flex h-full w-full items-center justify-center">
+          <div className="text-[12px] text-gray-500">Đang tải tin nhắn...</div>
+        </div>
+      );
+    }
+
+    if (groupedDateKeys.length === 0) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center text-gray-400">
+          <div className="mb-3 text-3xl">💬</div>
+          <div className="text-xs">Chưa có tin nhắn nào</div>
+        </div>
+      );
+    }
+
+    return groupedDateKeys.map((dateKey) => (
+      <div key={dateKey}>
+        <div className="my-2 flex justify-center">
+          <span className="rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-gray-500">
+            {dateKey}
+          </span>
+        </div>
+
+        {groupedMessages[dateKey].map((message, messageIndex) => {
+          const isOwnMessage = message.senderId === currentUserId;
+          const messagesInDay = groupedMessages[dateKey];
+          const previousMessage = messageIndex > 0 ? messagesInDay[messageIndex - 1] : null;
+          const currentTimestamp = getMessageTimestamp(message);
+          const previousTimestamp = previousMessage ? getMessageTimestamp(previousMessage) : Number.NaN;
+          const showMeta = !previousMessage || Number.isNaN(currentTimestamp) || Number.isNaN(previousTimestamp)
+            ? true
+            : (currentTimestamp - previousTimestamp) >= 10 * 60 * 1000;
+
+          return (
+            <div key={message.id} className={`group flex max-w-[85%] flex-col ${isOwnMessage ? 'ml-auto items-end' : 'items-start'} mb-3`}>
+              {showMeta && (
+                <div className="mb-1 flex items-center gap-2">
+                  {!isOwnMessage && (
+                    <span className="text-[11px] font-semibold text-gray-800">
+                      {chatType === MessageType.CLASS_GROUP ? message.senderName : headerName}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-500">
+                    {formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
+                  </span>
+                  {isOwnMessage && <span className="text-[11px] font-semibold text-blue-600">You</span>}
+                </div>
+              )}
+
+              <div
+                className={`rounded-sm px-3 py-2 text-[15px] leading-relaxed shadow-sm ${isOwnMessage
+                  ? 'bg-blue-50 text-gray-800 shadow-[0_6px_16px_rgba(59,130,246,0.20)]'
+                  : 'bg-white text-gray-800 shadow-[0_6px_16px_rgba(15,23,42,0.12)]'
+                  } max-w-full overflow-hidden`}
+                title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
+              >
+                {renderMessageContent(message)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ));
+  }, [loading, groupedDateKeys, groupedMessages, currentUserId, chatType, headerName, renderMessageContent]);
 
   return (
-    <div className={fullScreen ? 'mx-auto flex h-screen min-h-screen w-full max-w-[420px] flex-col overflow-hidden border-x border-gray-200 bg-white' : 'flex h-[560px] w-[360px] flex-col overflow-hidden rounded-sm border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.1)]'}>
+    <div className={fullScreen ? 'mx-auto flex h-screen min-h-screen w-full max-w-[420px] flex-col overflow-hidden bg-white shadow-[0_12px_30px_rgba(15,23,42,0.12)]' : 'flex h-[560px] w-[360px] flex-col overflow-hidden rounded-sm bg-white shadow-[0_8px_24px_rgba(15,23,42,0.1)]'}>
       {/* Header */}
-      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-3.5">
+      <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between bg-white px-3.5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
         <div className="flex items-center gap-1">
           <button
             onClick={onClose}
@@ -735,81 +878,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-white px-3 py-3 [scrollbar-color:#ffffff_#ffffff] [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-white [&::-webkit-scrollbar-track]:bg-white [&::-webkit-scrollbar]:w-[6px]">
-        {loading ? (
-          <div className="flex h-full w-full items-center justify-center">
-            <div className="text-[12px] text-gray-500">Đang tải tin nhắn...</div>
-          </div>
-        ) : Object.keys(groupedMessages).length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-gray-400">
-            <div className="mb-3 text-3xl">💬</div>
-            <div className="text-xs">Chưa có tin nhắn nào</div>
-          </div>
-        ) : (
-          Object.keys(groupedMessages).map((dateKey) => (
-            <div key={dateKey}>
-              <div className="my-2 flex justify-center">
-                <span className="rounded-sm bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-gray-500">
-                  {dateKey}
-                </span>
-              </div>
-
-              {groupedMessages[dateKey].map((message, messageIndex) => {
-                const isOwnMessage = message.senderId === currentUserId;
-                const messagesInDay = groupedMessages[dateKey];
-                const previousMessage = messageIndex > 0 ? messagesInDay[messageIndex - 1] : null;
-                const currentTimestamp = getMessageTimestamp(message);
-                const previousTimestamp = previousMessage ? getMessageTimestamp(previousMessage) : Number.NaN;
-                const showMeta = !previousMessage || Number.isNaN(currentTimestamp) || Number.isNaN(previousTimestamp)
-                  ? true
-                  : (currentTimestamp - previousTimestamp) >= 10 * 60 * 1000;
-
-                return (
-                  <div key={message.id} className={`group flex max-w-[85%] flex-col ${isOwnMessage ? 'ml-auto items-end' : 'items-start'} mb-3`}>
-                    {showMeta && (
-                      <div className="mb-1 flex items-center gap-2">
-                        {!isOwnMessage && (
-                          <span className="text-[11px] font-semibold text-gray-800">
-                            {chatType === MessageType.CLASS_GROUP ? message.senderName : headerName}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-gray-500">
-                          {formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
-                        </span>
-                        {isOwnMessage && <span className="text-[11px] font-semibold text-blue-600">You</span>}
-                      </div>
-                    )}
-
-                    <div
-                      className={`rounded-sm px-3 py-2 text-[15px] leading-relaxed shadow-sm ${isOwnMessage
-                        ? 'border border-blue-200 bg-blue-50 text-gray-800'
-                        : 'bg-gray-100 text-gray-800'
-                        }`}
-                      title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
-                    >
-                      {renderMessageContent(message)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))
-        )}
+      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-[#f6f8fc] px-3 py-3 [scrollbar-color:#ffffff_#ffffff] [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-white [&::-webkit-scrollbar-track]:bg-white [&::-webkit-scrollbar]:w-[6px]">
+        {renderedMessages}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
       {isAiAssistantChat ? (
         <div className="shrink-0 bg-white px-2.5 py-2.5">
-          <div className="rounded-xl border border-gray-200 bg-white px-2.5 py-2 shadow-[0_6px_20px_rgba(15,23,42,0.06)]">
+          <div className="rounded-xl bg-white px-2.5 py-2 shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
             {contextFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {contextFiles.map((filePath, index) => (
                   <span
                     key={`${filePath}-${index}`}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-1 text-[11px] ${index === 0 && filePath === activeFilePath
-                      ? 'border-blue-200 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-gray-50 text-gray-600'
+                    className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-[11px] shadow-[0_3px_10px_rgba(15,23,42,0.10)] ${index === 0 && filePath === activeFilePath
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'bg-gray-50 text-gray-600'
                       }`}
                     title={filePath}
                   >
@@ -872,7 +957,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       ) : (
-        <div className="relative flex shrink-0 items-center gap-1.5 border-t border-gray-200 bg-white px-2.5 py-2.5">
+        <div className="relative flex shrink-0 items-center gap-1.5 bg-white px-2.5 py-2.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)]">
           <input
             ref={imageInputRef}
             type="file"
@@ -911,7 +996,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             value={newMessage}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            className="h-[40px] min-h-[40px] max-h-[160px] flex-1 resize-none rounded-sm border-0 border-b border-gray-300 bg-gray-50 px-2.5 py-2 text-[14px] leading-[20px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-blue-500 focus:ring-0"
+            className="h-[40px] min-h-[40px] max-h-[160px] flex-1 resize-none rounded-sm border-0 bg-gray-50 px-2.5 py-2 text-[14px] leading-[20px] text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-200"
             disabled={!isConnected}
             placeholder={pendingAttachment ? `Sẵn sàng gửi: ${pendingAttachment.name}` : 'Nhập tin nhắn...'}
           />

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StudentSubmissionDTO } from '../../services/apiService';
+import StudentResultView from './StudentResultView';
 import 'katex/dist/katex.min.css';
+import { FileSpreadsheet, RefreshCw } from 'lucide-react';
 
 const ReactMarkdown = require('react-markdown').default;
 const remarkGfm = require('remark-gfm').default;
@@ -13,6 +15,7 @@ interface AssignmentDetailProps {
   assignment: Assignment;
   onBack: () => void;
   isTeacher?: boolean;
+  user: any;
 }
 
 interface Assignment {
@@ -20,6 +23,8 @@ interface Assignment {
   assignmentCode: string;
   title: string;
   description: string;
+  tasks?: AssignmentTask[];
+  assignmentTasks?: AssignmentTask[];
   deadline: string;
   studentCount: number;
   className?: string;
@@ -28,9 +33,43 @@ interface Assignment {
   lastCommitAt?: string;
 }
 
-const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService, assignment, onBack, isTeacher = true }) => {
+interface AssignmentTask {
+  orderNo?: number;
+  taskName?: string;
+  description?: string;
+}
+
+const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService, assignment, onBack, isTeacher = true, user }) => {
   const [submissions, setSubmissions] = useState<StudentSubmissionDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTaskId, setActiveTaskId] = useState(1);
+  const [viewingResultFor, setViewingResultFor] = useState<{ studentId?: number, studentName?: string } | null>(null);
+
+  const normalizedTasks = React.useMemo(() => {
+    const incomingTasks = (assignment.tasks && assignment.tasks.length > 0)
+      ? assignment.tasks
+      : (assignment.assignmentTasks && assignment.assignmentTasks.length > 0)
+        ? assignment.assignmentTasks
+        : [];
+
+    if (incomingTasks.length === 0) {
+      return [{
+        id: 1,
+        orderNo: 1,
+        taskName: 'Task 1',
+        description: assignment.description || ''
+      }];
+    }
+
+    return incomingTasks.map((task, index) => ({
+      id: index + 1,
+      orderNo: task.orderNo || index + 1,
+      taskName: (task.taskName && task.taskName.trim()) ? task.taskName.trim() : `Task ${index + 1}`,
+      description: task.description || ''
+    }));
+  }, [assignment.tasks, assignment.assignmentTasks, assignment.description]);
+
+  const activeTask = normalizedTasks.find((task) => task.id === activeTaskId) || normalizedTasks[0];
 
   useEffect(() => {
     loadSubmissions();
@@ -52,6 +91,10 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     return () => window.removeEventListener('message', handleMessage);
   }, [assignment.assignmentCode]);
 
+  useEffect(() => {
+    setActiveTaskId(1);
+  }, [assignment.assignmentCode]);
+
   const loadSubmissions = () => {
     setLoading(true);
     vscode.postMessage({
@@ -67,6 +110,19 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     const day = date.getDate();
     return `Tháng ${month}, ${day}`;
   };
+
+  const handleTeacherViewResult = (student: StudentSubmissionDTO) => {
+    setViewingResultFor({
+      studentId: student.studentId,
+      studentName: student.studentName
+    });
+  }
+
+  const handleViewResult = () => {
+    setViewingResultFor({
+      studentName: 'Bạn'
+    });
+  }
 
   const handleExportExcel = () => {
     vscode.postMessage({
@@ -84,7 +140,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
 
   const handleOpenWorkspace = () => {
     vscode.postMessage({
-      type: 'openAssignment',  // ✅ Auto-detect teacher/student
+      type: 'openAssignment',
       assignmentCode: assignment.assignmentCode
     });
   };
@@ -129,10 +185,21 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
     }
   };
 
+  if (viewingResultFor) {
+    return (
+      <StudentResultView
+        vscode={vscode}
+        assignmentCode={assignment.assignmentCode}
+        studentId={viewingResultFor.studentId}
+        studentName={viewingResultFor.studentName}
+        onBack={() => setViewingResultFor(null)}
+      />
+    );
+  }
+
   return (
     <div className="bg-white text-gray-900 min-h-screen flex justify-center">
-      <div className="w-full max-w-[420px] bg-white flex flex-col min-h-screen border-x border-gray-200">
-        {/* Back Button (no border) */}
+      <div className="w-full max-w-[420px] bg-white flex flex-col min-h-screen pb-5 shadow-[0_12px_30px_rgba(17,19,24,0.10)]">
         <div className="px-4 py-3">
           <button
             onClick={onBack}
@@ -145,125 +212,150 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
           </button>
         </div>
 
-        {/* Main Content */}
         <main className="flex flex-col flex-1">
-          {/* Assignment Info Section */}
-          <div className="px-4 py-4">
-            {/* Class Name with Workspace Button */}
-            <div className="flex items-center justify-between mb-1">
-              {assignment.className && (
-                <h1 className="text-xl font-bold text-black">
-                  {assignment.className}
-                </h1>
+          <div className="px-4 py-4 space-y-4">
+            <div className="bg-white rounded-2xl p-4 shadow-[0_8px_28px_rgba(17,19,24,0.08)] border border-[#eef2f9]">
+              <div className="flex items-center justify-between mb-1">
+                {assignment.className && (
+                  <h1 className="text-xl font-bold text-black">
+                    {assignment.className}
+                  </h1>
+                )}
+                <div className="flex items-center gap-2">
+                  {/* Nút Kết quả hiển thị cho Sinh viên */}
+                  {!isTeacher && (
+                    <button
+                      onClick={() => { handleViewResult() }}
+                      className="bg-white text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      Kết quả
+                    </button>
+                  )}
+                  <button
+                    onClick={handleOpenWorkspace}
+                    className="bg-[#135bec] text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-800 transition-colors"
+                  >
+                    {isTeacher ? 'Đồng bộ & mở' : 'Mở'}
+                  </button>
+                </div>
+              </div>
+
+              {assignment.classCode && (
+                <p className="text-sm text-gray-600 mb-2.5">
+                  Mã lớp: <span className="font-semibold">{assignment.classCode}</span>
+                </p>
               )}
-              <button
-                onClick={handleOpenWorkspace}
-                className="bg-[#135bec] text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-800 transition-colors"
-              >
-                <span>💻</span>
-                Đồng bộ & mở
-              </button>
+
+              <h2 className="text-lg font-bold text-black mb-3">
+                {assignment.title}
+              </h2>
+
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>Deadline: {new Date(assignment.deadline).toLocaleDateString('vi-VN')}</span>
+              </div>
             </div>
 
-            {/* Class Code */}
-            {assignment.classCode && (
-              <p className="text-sm text-gray-600 mb-3">
-                Mã lớp: <span className="font-semibold">{assignment.classCode}</span>
-              </p>
-            )}
-
-            {/* Assignment Title */}
-            <h2 className="text-lg font-bold text-black mb-2">
-              {assignment.title}
-            </h2>
-
-            {/* Description (render markdown) */}
-            <div className="text-sm leading-relaxed mb-3 markdown-preview">
-              {assignment.description?.trim() ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
-                  {assignment.description}
-                </ReactMarkdown>
-              ) : (
-                <p className="text-gray-700">Không có mô tả</p>
-              )}
+            <div className="flex flex-wrap gap-3 items-start">
+              {normalizedTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => setActiveTaskId(task.id)}
+                  className={`pr-3 pl-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-tight whitespace-nowrap transition-colors ${task.id === activeTask?.id
+                    ? 'bg-[#e8f0ff] text-[#135bec] border border-[#d6e4ff]'
+                    : 'bg-[#f7f9fc] text-[#5a6478] border border-[#e7edf6] hover:bg-[#f1f5fb]'
+                    }`}
+                >
+                  {task.taskName}
+                </button>
+              ))}
             </div>
 
-            {/* Deadline */}
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span>📅</span>
-              <span>Deadline: {new Date(assignment.deadline).toLocaleDateString('vi-VN')}</span>
+            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_8px_28px_rgba(17,19,24,0.08)] border border-[#eef2f9]">
+
+              <div className="p-4 text-sm leading-relaxed markdown-preview">
+                {(activeTask?.description || '').trim() ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
+                    {activeTask?.description || ''}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-gray-700">Không có mô tả</p>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Student Submissions Table */}
-          <div className="mt-2">
-            <div className="flex items-center justify-between px-4 py-3">
+          {/* {isTeacher && ( */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-100">
               <h3 className="text-sm font-bold tracking-tight text-black">
-                Danh sách nộp bài ({submissions.length} sinh viên)
+                Danh sách nộp bài ({submissions.length})
               </h3>
-              {isTeacher && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleExportExcel}
-                    className="text-xs px-2.5 py-1.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
-                    title="Xuất file Excel"
-                  >
-                    Xuất Excel
-                  </button>
-                  <button
-                    onClick={loadSubmissions}
-                    className="text-[16px] text-gray-600 hover:text-black"
-                    title="Tải lại danh sách"
-                  >
-                    🔄
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportExcel}
+                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-white text-gray-700 shadow-[0_4px_12px_rgba(17,19,24,0.14)] hover:bg-gray-50 transition-colors"
+                  title="Xuất file Excel"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={loadSubmissions}
+                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-white text-gray-700 shadow-[0_4px_12px_rgba(17,19,24,0.14)] hover:bg-gray-50 transition-colors"
+                  title="Tải lại danh sách"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {loading ? (
-              <div className="text-center py-8 text-gray-600">
-                Đang tải...
+              <div className="text-center py-12 text-zinc-500 text-[13px]">
+                Đang tải dữ liệu...
               </div>
             ) : (
-              <div className="w-full text-[12px]">
-                {/* Table Header */}
-                <div className="flex items-center px-4 py-2 border-b border-gray-200 bg-gray-50 font-bold text-gray-600 uppercase tracking-tighter">
-                  <div className="w-2/5">Sinh viên</div>
-                  <div className="w-[15%] text-center">Lần</div>
-                  <div className="w-1/4 text-center">Nộp cuối</div>
-                  <div className="w-[20%] text-right">Điểm</div>
-                </div>
-
-                {/* Table Body */}
+              <div className="w-full overflow-hidden">
                 {submissions.length === 0 ? (
-                  <div className="text-center py-8 text-gray-600">
+                  <div className="text-center py-12 text-zinc-500 text-[13px]">
                     Chưa có sinh viên nộp bài
                   </div>
                 ) : (
-                  submissions.map((submission, index) => (
-                    <div
-                      key={submission.studentId || index}
-                      className="flex items-center px-4 py-3 border-b border-gray-200 hover:bg-gray-50 cursor-pointer group"
-                    >
-                      <div className="w-2/5 font-semibold truncate pr-2 text-black">
-                        {submission.studentName}
-                      </div>
-                      <div className="w-[15%] text-center text-gray-600">
-                        {submission.commitCount || 0}
-                      </div>
-                      <div className="w-1/4 text-center text-gray-600">
-                        {formatDate(submission.lastCommitAt)}
-                      </div>
-                      <div className="w-[20%] text-right font-medium text-black">
-                        {formatScore(submission.score)}
-                      </div>
-                    </div>
-                  ))
+                  <table className="w-full border-collapse text-left">
+                    <thead>
+                      <tr className="bg-zinc-50">
+                        <th className="px-6 py-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-100">
+                          Họ và tên
+                        </th>
+                        <th className="px-6 py-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-100 text-right">
+                          Điểm
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100/50">
+                      {submissions.map((submission, index) => (
+                        <tr key={submission.studentId || index}
+                          className="hover:bg-zinc-50 transition-colors group cursor-pointer"
+                          onClick={() => handleTeacherViewResult(submission)}
+                        >
+                          <td className="px-6 py-4">
+                            <span className="text-[13px] font-bold text-black group-hover:underline cursor-pointer">
+                              {submission.studentName}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <span className="text-[13px] font-bold text-black">
+                              {formatScore(submission.score)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             )}
           </div>
+          {/* )} */}
         </main>
       </div>
     </div>

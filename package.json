@@ -29,6 +29,20 @@
       {
         "command": "auto-git.createCodeCommentFromSelection",
         "title": "Auto Git: Comment Selected Code"
+      },
+      {
+        "command": "auto-git.inspectGlobalState",
+        "title": "Auto Git: Inspect Global State"
+      },
+      {
+        "command": "codingrooms.runCode",
+        "title": "Run Code",
+        "icon": "$(play)"
+      },
+      {
+        "command": "codingrooms.submitCode",
+        "title": "Submit",
+        "icon": "$(cloud-upload)"
       }
     ],
     "menus": {
@@ -37,6 +51,18 @@
           "command": "auto-git.createCodeCommentFromSelection",
           "when": "editorHasSelection",
           "group": "navigation@99"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "codingrooms.runCode",
+          "group": "navigation@1",
+          "when": "resourceLangId == java || resourceLangId == python || resourceLangId == cpp"
+        },
+        {
+          "command": "codingrooms.submitCode",
+          "group": "navigation@2",
+          "when": "resourceLangId == java || resourceLangId == python || resourceLangId == cpp"
         }
       ]
     },

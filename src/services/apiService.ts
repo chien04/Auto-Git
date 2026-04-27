@@ -6,6 +6,7 @@ export interface LoginResponse {
     name: string;
     userId: string;
     role?: string;
+    profilePicture?: string;
 }
 
 export interface CreateClassResponse {
@@ -25,6 +26,18 @@ export interface CreateAssignmentResponse {
     repoUrl: string;
     token: string;
     deadline?: string;
+}
+
+export interface CreateAssignmentTaskPayload {
+    orderNo?: number;
+    taskName: string;
+    description: string;
+}
+
+export interface UploadTaskZipPayload {
+    taskName: string;
+    fileName: string;
+    fileContent: string;
 }
 
 export interface JoinAssignmentResponse {
@@ -132,6 +145,7 @@ export interface WorkspaceUploadRequest {
     assignmentCode: string;
     studentAssignments: VectorStudentAssignmentDTO[];
 }
+
 
 export class ApiService {
     private api: AxiosInstance;
@@ -268,13 +282,20 @@ export class ApiService {
         }
     }
 
-    async createAssignment(classCode: string, title: string, description: string, deadline?: string): Promise<CreateAssignmentResponse> {
+    async createAssignment(
+        classCode: string,
+        title: string,
+        description: string,
+        deadline?: string,
+        tasks?: CreateAssignmentTaskPayload[]
+    ): Promise<CreateAssignmentResponse> {
         try {
             const response = await this.api.post('/assignment/create', {
                 classCode,
                 title,
                 description,
-                deadline: deadline || null
+                deadline: deadline || null,
+                tasks: tasks || []
             });
             return response.data;
         } catch (error: any) {
@@ -295,6 +316,21 @@ export class ApiService {
             return response.data;
         } catch (error: any) {
             throw new Error(`Failed to upload test cases ZIP: ${error.response?.data?.message || error.message}`);
+        }
+    }
+
+    /**
+     * Teacher: Upload many task ZIP files in one request
+     */
+    async uploadTaskTestCasesZip(assignmentCode: string, tasks: UploadTaskZipPayload[]): Promise<any> {
+        try {
+            const response = await this.api.post('/test-cases/upload-task-zips', {
+                assignmentCode,
+                tasks
+            });
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to upload task test cases ZIP: ${error.response?.data?.message || error.message}`);
         }
     }
 
@@ -693,9 +729,6 @@ export class ApiService {
         }
     }
 
-    /**
- * Export assignment scores to Excel
- */
     async exportAssignmentExcel(assignmentId: string): Promise<ArrayBuffer> {
         try {
             const response = await this.api.get(`/assignment/export-excel/${parseInt(assignmentId, 10)}`, {
@@ -807,6 +840,38 @@ export class ApiService {
     async markAllNotificationsAsRead(): Promise<void> {
         await this.api.patch('/notifications/read-all', {});
     }
+
+    public async runCode(payload: any): Promise<any> {
+        try {
+            // Đổi URL cho khớp với @RequestMapping của Controller
+            const response = await this.api.post('/judge/run', payload);
+            return response.data;
+        } catch (error) {
+            console.error('[ApiService] Error running code:', error);
+            throw error;
+        }
+    }
+
+    public async submitCode(payload: any): Promise<any> {
+        try {
+            const response = await this.api.post('/judge/submit', payload);
+            return response.data;
+        } catch (error) {
+            console.error('[ApiService] Error submitting code:', error);
+            throw error;
+        }
+    }
+
+    public async getTaskResult(payload: any): Promise<any> {
+        try {
+            const response = await this.api.post('result/task', payload);
+            return response.data;
+        }
+        catch (error) {
+            console.error('[ApiService] Error getting task result:', error);
+            throw error;
+        }
+    }
 }
 
 export interface StudentSubmissionDTO {
@@ -814,7 +879,7 @@ export interface StudentSubmissionDTO {
     studentName: string;
     studentCode: string;
     email: string;
-    commitCount: number;  // Số lần nộp (Att.)
-    lastCommitAt: string | null;  // Lần nộp cuối cùng
-    score: number | null;  // Điểm (0-10)
+    commitCount: number;
+    lastCommitAt: string | null;
+    score: number | null;
 }

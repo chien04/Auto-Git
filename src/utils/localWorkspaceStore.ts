@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import * as os from 'os';
 
 export interface RoomEntry {
     relativePath: string;
@@ -45,22 +46,60 @@ export async function ensureBaseDirectory(
         return savedBaseDirectory;
     }
 
-    const pick = await vscode.window.showOpenDialog({
-        canSelectFiles: false,
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: 'Chọn thư mục gốc lưu bài tập',
-        title: 'Thiết lập thư mục gốc (Base Directory)'
-    });
+    try {
+        const appDataPath = process.env.APPDATA ||
+            (process.platform === 'darwin'
+                ? path.join(os.homedir(), 'Library', 'Application Support')
+                : path.join(os.homedir(), '.config'));
 
-    if (!pick || pick.length === 0) {
+        const autoGitPath = path.join(appDataPath, 'AutoGit', userId);
+
+        if (!fs.existsSync(autoGitPath)) {
+            fs.mkdirSync(autoGitPath, { recursive: true });
+        }
+
+        await context.globalState.update(key, autoGitPath);
+
+        ensureConfigInitialized(autoGitPath, userId);
+        return autoGitPath;
+
+    } catch (error) {
+        vscode.window.showErrorMessage(`Lỗi khi khởi tạo thư mục lưu trữ: ${error}`);
         return null;
     }
+}
 
-    const selectedPath = pick[0].fsPath;
-    await context.globalState.update(key, selectedPath);
-    ensureConfigInitialized(selectedPath, userId);
-    return selectedPath;
+export function getCurrentAssignmentCodeFromWorkspace(
+    context: vscode.ExtensionContext,
+    userId: string
+): string | null {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) return null;
+
+    const currentWorkspacePath = path.normalize(workspaceFolders[0].uri.fsPath).toLowerCase();
+
+    const key = getBaseDirectoryKey(userId);
+    const baseDirectory = context.globalState.get<string>(key);
+    if (!baseDirectory || !fs.existsSync(baseDirectory)) return null;
+
+    try {
+        const config = loadConfig(baseDirectory, userId);
+        for (const [assignmentCode, room] of Object.entries(config.rooms)) {
+
+            const resolved = resolvePathInBaseDirectory(baseDirectory, room.relativePath);
+
+            if (resolved.ok) {
+                const roomFullPath = path.normalize(resolved.fullPath).toLowerCase();
+                if (currentWorkspacePath === roomFullPath) {
+                    return assignmentCode;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Lỗi khi đọc config để tìm Assignment Code:', error);
+    }
+
+    return null;
 }
 
 export function loadConfig(baseDirectory: string, userId: string): CodingRoomsData {

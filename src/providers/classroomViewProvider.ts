@@ -73,9 +73,12 @@ import {
     handleSkipTestCases,
     handleSyncAssignmentWorkspace,
     handleSyncTeacherWorkspaceBestEffort,
+    handleUploadTaskTestCasesZip,
     handleUploadTestCasesZip,
-    handleViewAssignment
+    handleViewAssignment,
+    viewTaskResult
 } from './handlers/assignmentHandlers';
+import { getBaseDirectoryKey } from '../utils/localWorkspaceStore';
 
 export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'autoGitClassroom.mainView';
@@ -195,11 +198,21 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 break;
 
             case 'createAssignment':
-                await this._handleCreateAssignment(message.classCode, message.title, message.description, message.deadline);
+                await this._handleCreateAssignment(
+                    message.classCode,
+                    message.title,
+                    message.description,
+                    message.deadline,
+                    message.tasks
+                );
                 break;
 
             case 'uploadTestCasesZip':
                 await this._handleUploadTestCasesZip(message.assignmentCode, message.fileName, message.fileContent);
+                break;
+
+            case 'uploadTaskTestCasesZip':
+                await this._handleUploadTaskTestCasesZip(message.assignmentCode, message.tasks);
                 break;
 
             case 'skipTestCases':
@@ -399,6 +412,18 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             case 'openCommentedFileFromNotification':
                 await this._handleOpenCommentedFileFromNotification(message.assignmentCode, message.studentFilePath);
                 break;
+
+            case 'loadSetting':
+                await this._handleLoadSetting(message.userId);
+                break;
+
+            case 'viewResult':
+                await this._handleViewResult(message.studentId, message.assignmentCode);
+                break;
+
+            case 'viewStudentCode':
+                await this._handleViewStudentCode(message.sourceCode, message.language, message.taskName);
+                break;
         }
     }
 
@@ -434,12 +459,22 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleRestoreState(this._context, this.apiService, !!this._view, (message) => this._postMessage(message));
     }
 
-    private async _handleCreateAssignment(classCode: string, title: string, description: string, deadline: string) {
-        await handleCreateAssignment(this._getAssignmentHandlerDeps(), classCode, title, description, deadline);
+    private async _handleCreateAssignment(
+        classCode: string,
+        title: string,
+        description: string,
+        deadline: string,
+        tasks: any[] = []
+    ) {
+        await handleCreateAssignment(this._getAssignmentHandlerDeps(), classCode, title, description, deadline, tasks);
     }
 
     private async _handleUploadTestCasesZip(assignmentCode: string, fileName: string, fileContent: string) {
         await handleUploadTestCasesZip(this._getAssignmentHandlerDeps(), assignmentCode, fileName, fileContent);
+    }
+
+    private async _handleUploadTaskTestCasesZip(assignmentCode: string, tasks: any[]) {
+        await handleUploadTaskTestCasesZip(this._getAssignmentHandlerDeps(), assignmentCode, tasks || []);
     }
 
     private async _handleSkipTestCases(assignmentCode: string) {
@@ -616,7 +651,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080 ws://localhost:8080;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080 ws://localhost:8080;">
                 <title>Auto Submit</title>
             </head>
             <body>
@@ -755,5 +790,27 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             studentFilePath,
             (targetAssignmentCode) => this._handleOpenAssignment(targetAssignmentCode)
         );
+    }
+
+    private async _handleLoadSetting(userId: string) {
+        const key = getBaseDirectoryKey(userId);
+
+        const savedBaseDirectory = this._context.globalState.get<string>(key);
+        this._postMessage({
+            type: 'settingLoaded',
+            baseDirectory: savedBaseDirectory || 'Chưa thiết lập'
+        });
+    }
+
+    private async _handleViewResult(studentId: number, assignmentCode: string) {
+        await viewTaskResult(this._getAssignmentHandlerDeps(), studentId, assignmentCode);
+    }
+
+    private async _handleViewStudentCode(sourceCode: string, language: string, taskName: string) {
+        const doc = await vscode.workspace.openTextDocument({
+            content: sourceCode,
+            language: language
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
     }
 }

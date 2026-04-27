@@ -12,6 +12,7 @@ interface AssignmentListProps {
   onInitialAssignmentHandled?: () => void;
   onViewChange?: (isDetailView: boolean) => void; // Notify parent when view changes
   className?: string;
+  user: any;
 }
 
 interface Assignment {
@@ -41,7 +42,8 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
   initialAssignmentData,
   onInitialAssignmentHandled,
   onViewChange,
-  className
+  className,
+  user
 }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -123,61 +125,61 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
 
   const loadAssignments = () => {
     setLoading(true);
-    vscode.postMessage({ 
-      type: 'getAssignments', 
-      classCode: classCode 
+    vscode.postMessage({
+      type: 'getAssignments',
+      classCode: classCode
     });
   };
 
   const handleJoinAssignment = (assignment: Assignment) => {
-    vscode.postMessage({ 
-      type: 'joinAssignment', 
+    vscode.postMessage({
+      type: 'joinAssignment',
       assignmentCode: assignment.assignmentCode,
-      title: assignment.title 
+      title: assignment.title
     });
   };
 
   const handleViewAssignmentFolder = (assignment: Assignment) => {
-    vscode.postMessage({ 
-      type: 'openAssignmentFolder', 
-      assignmentCode: assignment.assignmentCode 
+    vscode.postMessage({
+      type: 'openAssignmentFolder',
+      assignmentCode: assignment.assignmentCode
     });
   };
 
   const handleViewAssignment = (assignment: Assignment) => {
-    vscode.postMessage({ 
-      type: 'viewAssignment', 
-      assignmentCode: assignment.assignmentCode 
+    vscode.postMessage({
+      type: 'viewAssignment',
+      assignmentCode: assignment.assignmentCode
     });
   };
 
   const handleOpenTeacherAssignment = (assignment: Assignment) => {
-    vscode.postMessage({ 
-      type: 'openTeacherAssignment', 
+    vscode.postMessage({
+      type: 'openTeacherAssignment',
       assignmentCode: assignment.assignmentCode
     });
   };
 
   const handleSyncWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
     event.stopPropagation();
-    
+
     // Check if this is the currently opened workspace
     if (activeAssignmentCode && activeAssignmentCode !== assignment.assignmentCode) {
       alert('⚠️ Chỉ có thể sync bài tập hiện tại đang mở!\n\nVui lòng click vào bài tập để chuyển workspace trước.');
       return;
     }
-    
-    vscode.postMessage({ 
-      type: 'syncAssignmentWorkspace', 
-      assignmentCode: assignment.assignmentCode 
+
+    vscode.postMessage({
+      type: 'syncAssignmentWorkspace',
+      assignmentCode: assignment.assignmentCode
     });
   };
 
   const handleSetupWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
     event.stopPropagation();
     // Send message to provider which will show VS Code confirmation dialog
-    vscode.postMessage({ 
-      type: 'setupAssignmentWorkspace', 
+    vscode.postMessage({
+      type: 'setupAssignmentWorkspace',
       assignmentCode: assignment.assignmentCode,
       title: assignment.title
     });
@@ -185,8 +187,8 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
 
   const handleDeleteAssignment = (assignment: Assignment) => {
     // Send message to provider which will show VS Code confirmation dialog
-    vscode.postMessage({ 
-      type: 'deleteAssignment', 
+    vscode.postMessage({
+      type: 'deleteAssignment',
       assignmentCode: assignment.assignmentCode,
       title: assignment.title
     });
@@ -215,6 +217,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
         }}
         onBack={() => setSelectedAssignment(null)}
         isTeacher={isTeacher}
+        user={user}
       />
     );
   }
@@ -244,15 +247,14 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
       <div className="px-5 space-y-4">
         {assignments.map((assignment) => {
           const isCurrentAssignment = assignment.assignmentCode === activeAssignmentCode;
-          
+
           return (
             <div
               key={assignment.assignmentId}
-              className={`group relative border rounded-xl p-4 transition-all cursor-pointer ${
-                isCurrentAssignment
-                  ? 'border-[#135bec] bg-[#135bec]/5'
-                  : 'border-[#dbdfe6] hover:border-[#135bec]'
-              }`}
+              className={`group relative rounded-2xl p-4 bg-white transition-all cursor-pointer ${isCurrentAssignment
+                ? 'bg-[#edf3ff] shadow-[0_10px_26px_rgba(19,91,236,0.18)]'
+                : 'shadow-[0_8px_24px_rgba(17,19,24,0.10)] hover:shadow-[0_12px_30px_rgba(17,19,24,0.14)]'
+                }`}
               onClick={() => {
                 if (isTeacher) {
                   // Teacher: Navigate to detail view
@@ -324,7 +326,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
                       )}
                     </>
                   )}
-                  
+
                 </div>
               </div>
             </div>

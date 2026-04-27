@@ -14,6 +14,11 @@ import {
 	tryOpenPendingNotificationFile
 } from './extension/runtimeLifecycle';
 
+import {
+	handleRunCode,
+	handleSubmitCode
+} from './extension/executeCode';
+
 let classroomViewProvider: ClassroomViewProvider;
 let apiService: ApiService;
 let gitService: GitService;
@@ -46,7 +51,7 @@ function isTeacherRole(context: vscode.ExtensionContext): boolean {
 }
 
 class SelectionCommentCodeLensProvider implements vscode.CodeLensProvider {
-	constructor(private readonly context: vscode.ExtensionContext) {}
+	constructor(private readonly context: vscode.ExtensionContext) { }
 
 	private readonly _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
 	public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
@@ -303,7 +308,7 @@ async function loadAndRenderCommentsForEditor(
 					const content = comment.content || '';
 					const resolveUri = buildResolveCommandUri(comment, fileContext);
 					const hover = new vscode.MarkdownString(
-						`**${author}**  \n\n${content}  \n\n[✓ Resolve comment](${resolveUri.toString()})`
+						`**${author}**  \n\n${content}  \n\n[✓ Đồng ý](${resolveUri.toString()})`
 					);
 					hover.isTrusted = true;
 
@@ -373,7 +378,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	const rangeHighlightDecorationType = vscode.window.createTextEditorDecorationType({
 		backgroundColor: 'rgba(56, 189, 248, 0.24)'
 	});
-	
+
 	checkGitInstalled();
 
 	apiService = new ApiService('http://localhost:8080/api');
@@ -407,6 +412,19 @@ export async function activate(context: vscode.ExtensionContext) {
 			vscode.commands.executeCommand('autoGitClassroom.mainView.focus');
 		}
 	);
+
+	const inspectStateCmd = vscode.commands.registerCommand('auto-git.inspectGlobalState', () => {
+		const keys = context.globalState.keys();
+		console.log("=== TẤT CẢ KEYS TRONG GLOBAL STATE ===");
+
+		keys.forEach(key => {
+			const value = context.globalState.get(key);
+			console.log(`Key: ${key} | Value:`, value);
+		});
+
+		vscode.window.showInformationMessage("Đã in globalState ra Debug Console!");
+	});
+
 
 	const logoutCommand = vscode.commands.registerCommand(
 		'auto-git.logout',
@@ -539,7 +557,38 @@ export async function activate(context: vscode.ExtensionContext) {
 		loadAndRenderCommentsForEditor(context, editor, commentDecorationType, rangeHighlightDecorationType, 'onDidChangeActiveTextEditor');
 	});
 
+	const runCodeCommand = vscode.commands.registerCommand('codingrooms.runCode', async () => {
+		const userData = context.globalState.get<{ userId: string }>('user_data');
+
+		if (!userData || !userData.userId) {
+			vscode.window.showErrorMessage('Vui lòng đăng nhập để thực hiện lệnh Run!');
+			return;
+		}
+
+		await handleRunCode(
+			runtimeDeps.apiService,
+			userData.userId,
+			context
+		);
+	});
+
+	const submitCodeCommand = vscode.commands.registerCommand('codingrooms.submitCode', async () => {
+		const userData = context.globalState.get<{ userId: string }>('user_data');
+
+		if (!userData || !userData.userId) {
+			vscode.window.showErrorMessage('Vui lòng đăng nhập để nộp bài!');
+			return;
+		}
+
+		await handleSubmitCode(
+			runtimeDeps.apiService,
+			userData.userId,
+			context
+		);
+	});
+
 	context.subscriptions.push(
+		inspectStateCmd,
 		openClassroomCommand,
 		logoutCommand,
 		createCodeCommentCommand,
@@ -548,7 +597,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		selectionChangeListener,
 		activeEditorChangeListener,
 		commentDecorationType,
-		rangeHighlightDecorationType
+		rangeHighlightDecorationType,
+		runCodeCommand,
+		submitCodeCommand
 	);
 
 	// Setup auto-push on save
@@ -570,7 +621,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		rangeHighlightDecorationType,
 		'initialActivation'
 	);
-	
+
 	// Listen for workspace folder changes to update UI
 	vscode.workspace.onDidChangeWorkspaceFolders(async () => {
 		console.log('[DEBUG] Workspace folders changed, restoring state...');

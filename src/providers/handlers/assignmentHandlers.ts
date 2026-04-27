@@ -2,7 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import * as vscode from 'vscode';
-import { ApiService, WorkspaceUploadRequest, VectorFileDTO, VectorStudentAssignmentDTO } from '../../services/apiService';
+import {
+    ApiService,
+    CreateAssignmentTaskPayload,
+    UploadTaskZipPayload,
+    WorkspaceUploadRequest,
+    VectorFileDTO,
+    VectorStudentAssignmentDTO
+} from '../../services/apiService';
 import { GitService } from '../../services/gitService';
 import {
     ensureBaseDirectory,
@@ -27,7 +34,8 @@ export async function handleCreateAssignment(
     classCode: string,
     title: string,
     description: string,
-    deadline: string
+    deadline: string,
+    tasks: CreateAssignmentTaskPayload[] = []
 ): Promise<void> {
     try {
         const userData = deps.context.globalState.get<any>('user_data');
@@ -42,7 +50,7 @@ export async function handleCreateAssignment(
             return;
         }
 
-        const response = await deps.apiService.createAssignment(classCode, title, description, deadline);
+        const response = await deps.apiService.createAssignment(classCode, title, description, deadline, tasks);
 
         if (response.repoUrl && response.token) {
             vscode.window.showInformationMessage('Đang clone repository bài tập...');
@@ -108,6 +116,32 @@ export async function handleCreateAssignment(
             error: error.message
         });
         vscode.window.showErrorMessage(`Lỗi tạo bài tập: ${error.message}`);
+    }
+}
+
+export async function handleUploadTaskTestCasesZip(
+    deps: AssignmentHandlerDeps,
+    assignmentCode: string,
+    tasks: UploadTaskZipPayload[]
+): Promise<void> {
+    try {
+        vscode.window.showInformationMessage('Đang upload test cases theo từng task...');
+
+        const response = await deps.apiService.uploadTaskTestCasesZip(assignmentCode, tasks);
+        deps.postMessage({
+            command: 'uploadTaskTestCasesSuccess',
+            data: response
+        });
+
+        vscode.window.showInformationMessage('Test cases theo task đã được upload thành công!');
+        await openAssignmentFolderIfExists(deps, assignmentCode);
+    } catch (error: any) {
+        console.error('[DEBUG] Upload task zips error:', error);
+        deps.postMessage({
+            command: 'uploadTaskTestCasesError',
+            error: error.message
+        });
+        vscode.window.showErrorMessage(`Lỗi upload test cases theo task: ${error.message}`);
     }
 }
 
@@ -300,7 +334,8 @@ export async function handleOpenStudentAssignment(
 
         const roomData = getRoomData(baseDirectory, userData.userId, assignmentCode);
         if (!roomData.found) {
-            vscode.window.showWarningMessage('Không tìm thấy bài tập trong .coding-rooms.json. Vui lòng join lại assignment.');
+            vscode.window.showWarningMessage('Không tìm thấy dữ liệu bài tập trên máy. Đang tải lại từ server...');
+            await handleJoinAssignment(deps, assignmentCode, baseDirectory);
             return;
         }
 
@@ -590,18 +625,18 @@ export async function handleSyncAssignmentWorkspace(
             throw new Error('Không tìm thấy assignment trong .coding-rooms.json để đồng bộ.');
         }
 
-        vscode.window.showInformationMessage('⏳ Đang đồng bộ code từ sinh viên...');
+        vscode.window.showInformationMessage('Đang đồng bộ code từ sinh viên...');
         await deps.apiService.syncAssignmentWorkspace(assignmentCode, roomData.fullPath);
         deps.postMessage({
             type: 'syncWorkspaceSuccess'
         });
-        vscode.window.showInformationMessage('✅ Đã đồng bộ code mới nhất!');
+        vscode.window.showInformationMessage('Đã đồng bộ code mới nhất!');
     } catch (error: any) {
         deps.postMessage({
             type: 'syncWorkspaceError',
             error: error.message
         });
-        vscode.window.showErrorMessage(`❌ Lỗi đồng bộ: ${error.message}`);
+        vscode.window.showErrorMessage(`Lỗi đồng bộ: ${error.message}`);
     }
 }
 
@@ -643,13 +678,13 @@ export async function handleSetupAssignmentWorkspace(
             type: 'setupWorkspaceSuccess',
             data: result
         });
-        vscode.window.showInformationMessage(`✅ ${result.message}`);
+        vscode.window.showInformationMessage(`${result.message}`);
     } catch (error: any) {
         deps.postMessage({
             type: 'setupWorkspaceError',
             error: error.message
         });
-        vscode.window.showErrorMessage(`❌ Lỗi setup: ${error.message}`);
+        vscode.window.showErrorMessage(`Lỗi setup: ${error.message}`);
     }
 }
 
@@ -822,13 +857,13 @@ export async function handleDeleteAssignment(
         deps.postMessage({
             type: 'assignmentDeleted'
         });
-        vscode.window.showInformationMessage('✅ Đã xóa bài tập!');
+        vscode.window.showInformationMessage('Đã xóa bài tập!');
     } catch (error: any) {
         deps.postMessage({
             type: 'deleteAssignmentError',
             error: error.message
         });
-        vscode.window.showErrorMessage(`❌ Lỗi xóa bài tập: ${error.message}`);
+        vscode.window.showErrorMessage(`Lỗi xóa bài tập: ${error.message}`);
     }
 }
 
@@ -855,6 +890,26 @@ async function openAssignmentFolderIfExists(
         }
     } catch (error: any) {
         console.error('[DEBUG] Failed to open assignment folder:', error);
+    }
+}
+
+export async function viewTaskResult(
+    deps: AssignmentHandlerDeps,
+    studentId: number,
+    assignmentCode: string
+): Promise<void> {
+    try {
+        const data = await deps.apiService.getTaskResult({ studentId, assignmentCode });
+
+        deps.postMessage({
+            type: 'viewTaskResultSuccess',
+            data: data
+        });
+    } catch (error: any) {
+        deps.postMessage({
+            type: 'viewTaskResultError',
+            error: error.message
+        });
     }
 }
 

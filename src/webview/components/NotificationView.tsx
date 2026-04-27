@@ -188,93 +188,150 @@ const NotificationView: React.FC<NotificationViewProps> = ({ vscode, onNotificat
   }, [search, notifications]);
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-64px)] bg-white">
-      <div className="px-4 py-3 border-b border-[#eef1f6] bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      {/* Search Section - Match ChatView exactly */}
+      <div className="px-4 py-4">
         <div className="relative flex items-center">
-          <span className="absolute left-3 text-[#9ca3af] text-[14px]">/</span>
+          <svg className="absolute left-3 w-[18px] h-[18px] text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
-            className="w-full bg-[#f3f4f6] border border-transparent rounded-lg py-2.5 pl-9 pr-4 text-xs focus:ring-1 focus:ring-[#111318] focus:border-[#111318] placeholder-[#9ca3af] outline-none transition-all"
+            className="w-full bg-[#fafafa] border-none rounded-full py-2.5 pl-10 pr-4 text-sm font-medium focus:ring-1 focus:ring-black placeholder:text-neutral-400 outline-none transition-all"
             placeholder="Search notifications..."
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          {search && (
+            <button
+              className="absolute right-3 text-neutral-400 hover:text-black transition-colors"
+              onClick={() => setSearch('')}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto bg-white pb-24">
+      {/* Main List Section */}
+      <main className="w-full flex-grow flex flex-col pb-28 overflow-y-auto custom-scrollbar">
         {filteredNotifications.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-6 py-16">
-            <div className="w-12 h-12 rounded-full bg-[#f3f4f6] flex items-center justify-center text-lg mb-3">?</div>
-            <p className="text-sm font-semibold text-[#111318]">No notifications found</p>
-            <p className="text-xs text-[#616f89] mt-1">Try another keyword.</p>
+          <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+            <p className="text-neutral-500 text-sm font-medium">
+              {search.trim() ? 'Không tìm thấy thông báo' : 'Không có thông báo nào'}
+            </p>
           </div>
         ) : (
-          filteredNotifications.map((item) => (
-            <div
-              key={item.id}
-              className="group flex items-start gap-3 px-4 py-4 hover:bg-[#f8fafc] cursor-pointer border-b border-[#f1f5f9]"
-              onClick={() => {
-                if (item.unread) {
-                  vscode.postMessage({ type: 'markNotificationAsRead', notificationId: item.id });
-                }
+          <div className="flex-grow">
+            {/* Header Title */}
+            <div className="px-4 py-2 bg-[#fafafa] flex items-center justify-between">
+              <h2 className="font-bold text-[10px] tracking-widest uppercase text-neutral-500">Tất cả thông báo</h2>
+              {/* Optional: Mark all as read button could go here */}
+              {notifications.some(n => n.unread) && (
+                <button
+                  onClick={() => vscode.postMessage({ type: 'markAllNotificationsAsRead' })}
+                  className="text-[10px] font-bold text-black hover:text-neutral-500 uppercase tracking-tight transition-colors"
+                >
+                  Đánh dấu đã đọc
+                </button>
+              )}
+            </div>
 
-                if (!onNotificationAction && item.rawType === 'COMMENT' && item.assignmentCode && item.studentFilePath) {
-                  vscode.postMessage({
-                    type: 'openCommentedFileFromNotification',
-                    assignmentCode: item.assignmentCode,
-                    studentFilePath: item.studentFilePath
-                  });
-                }
+            {/* List */}
+            <div className="divide-y divide-neutral-50">
+              {filteredNotifications.map((item) => (
+                <div
+                  key={item.id}
+                  className="group flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                  onClick={() => {
+                    if (item.unread) {
+                      vscode.postMessage({ type: 'markNotificationAsRead', notificationId: item.id });
+                    }
 
-                onNotificationAction?.(item);
-              }}
-            >
-              <div className="relative shrink-0">
-                <div className="w-12 h-12 rounded-lg bg-[#111318] text-white flex items-center justify-center text-xs font-bold">
-                  {item.initials}
-                </div>
-              </div>
+                    if (!onNotificationAction && item.rawType === 'COMMENT' && item.assignmentCode && item.studentFilePath) {
+                      vscode.postMessage({
+                        type: 'openCommentedFileFromNotification',
+                        assignmentCode: item.assignmentCode,
+                        studentFilePath: item.studentFilePath
+                      });
+                    }
 
-              <div className="flex flex-col flex-1 min-w-0">
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2 overflow-hidden mb-0.5">
-                    <p className="text-[14px] font-semibold truncate text-[#111318]">{item.title}</p>
-                    {item.roleLabel && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-tighter ${
-                          item.type === 'instructor'
-                            ? 'bg-[#111318] text-white'
-                            : 'bg-[#f3f4f6] text-[#616f89]'
-                        }`}
-                      >
-                        {item.roleLabel}
+                    onNotificationAction?.(item);
+                  }}
+                >
+                  <div className="flex items-center gap-4 min-w-0">
+                    {/* Avatar/Icon */}
+                    <div className="w-12 h-12 bg-black flex items-center justify-center rounded-full shrink-0">
+                      <span className="font-extrabold text-white text-xs uppercase tracking-tighter">
+                        {item.initials}
                       </span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-black tracking-tight truncate">
+                          {item.title}
+                        </span>
+                        {item.roleLabel && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tighter ${item.type === 'instructor'
+                              ? 'bg-black text-white'
+                              : 'bg-neutral-100 text-neutral-500'
+                              }`}
+                          >
+                            {item.roleLabel}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col mt-0.5">
+                        {item.subtitle && (
+                          <span className="text-[12px] text-neutral-500 truncate font-medium">
+                            {item.subtitle}
+                          </span>
+                        )}
+                        {item.preview && (
+                          <span className="text-[12px] text-neutral-400 truncate">
+                            {item.preview}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Action/Time */}
+                  <div className="flex flex-col items-end justify-between h-full shrink-0 gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-[10px] tracking-tight text-neutral-400 uppercase">
+                        {item.time}
+                      </span>
+                      {/* Delete Button (Hidden until hover) */}
+                      <button
+                        className="p-1 rounded text-neutral-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Xóa thông báo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          vscode.postMessage({ type: 'deleteNotification', notificationId: item.id });
+                        }}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Unread dot */}
+                    {item.unread && (
+                      <div className="w-2 h-2 bg-black rounded-full mt-auto mb-1"></div>
                     )}
                   </div>
-                  <span className="text-[10px] text-[#9ca3af]">{item.time}</span>
                 </div>
-
-                {item.subtitle && <p className="text-[12px] text-[#616f89] truncate">{item.subtitle}</p>}
-                {item.preview && <p className="text-[12px] text-[#616f89] truncate">{item.preview}</p>}
-              </div>
-
-              <button
-                className="ml-1 mt-1 p-1.5 rounded text-[#c0c7d4] hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Xóa thông báo"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  vscode.postMessage({ type: 'deleteNotification', notificationId: item.id });
-                }}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-
-              {item.unread && <span className="mt-2 w-2 h-2 bg-[#111318] rounded-full"></span>}
+              ))}
             </div>
-          ))
+          </div>
         )}
       </main>
     </div>

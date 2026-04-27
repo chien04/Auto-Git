@@ -12,10 +12,12 @@ interface MainAppProps {
   vscode: any;
 }
 
+type AppView = 'DASHBOARD' | 'CHAT';
+
 const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'DASHBOARD' | 'CHAT'>('DASHBOARD');
+  const [activeView, setActiveView] = useState<AppView>('DASHBOARD');
   const [selectedRole, setSelectedRole] = useState<'TEACHER' | 'STUDENT' | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatConfig, setChatConfig] = useState<{
@@ -29,11 +31,15 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   const hasCheckedLogin = useRef(false);
   const apiService = useRef(new ApiService()).current;
   const wsService = useRef(getWebSocketService()).current;
+  const resolveUserId = (userLike: any): number => {
+    const parsed = Number(userLike?.userId ?? userLike?.id);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
-      
+
       switch (message.type) {
         case 'loginSuccess':
           setUser(message.user);
@@ -43,8 +49,11 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           if (message.token) {
             apiService.setToken(message.token);
             // Connect WebSocket
-            if (message.user && message.user.userId) {
-              connectWebSocket(parseInt(message.user.userId), message.token);
+            if (message.user) {
+              const resolvedUserId = resolveUserId(message.user);
+              if (resolvedUserId > 0) {
+                connectWebSocket(resolvedUserId, message.token);
+              }
             }
           }
           break;
@@ -65,8 +74,11 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           if (message.token) {
             apiService.setToken(message.token);
             // Connect WebSocket if user is logged in
-            if (message.user && message.user.userId) {
-              connectWebSocket(parseInt(message.user.userId), message.token);
+            if (message.user) {
+              const resolvedUserId = resolveUserId(message.user);
+              if (resolvedUserId > 0) {
+                connectWebSocket(resolvedUserId, message.token);
+              }
             }
           }
           setLoading(false);
@@ -82,13 +94,13 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     };
 
     window.addEventListener('message', handleMessage);
-    
+
     // Chỉ gọi checkLoginStatus 1 lần duy nhất khi component mount
     if (!hasCheckedLogin.current) {
       hasCheckedLogin.current = true;
       vscode.postMessage({ type: 'checkLoginStatus' });
     }
-    
+
     return () => {
       window.removeEventListener('message', handleMessage);
       // Don't disconnect WebSocket here - it's a singleton service
@@ -104,16 +116,16 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
         await wsService.connect(userId, token, () => {
         });
       }
-      
+
       // ALWAYS set up global subscription (whether newly connected or already connected)
       const unsubscribe = wsService.subscribeToPrivateMessages(userId, (message) => {
-        
+
         // Always trigger refresh to update chat list
         setShouldRefreshChat(prev => !prev);
-        
+
         // Broadcast message to all components via window.postMessage
         window.postMessage({ type: 'websocketMessage', message }, '*');
-        
+
         // Notify extension about new message
         vscode.postMessage({ type: 'newMessage', message });
       });
@@ -142,7 +154,7 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     setSelectedRole(null);
   };
 
-  const handleViewChange = (view: 'DASHBOARD' | 'CHAT') => {
+  const handleViewChange = (view: AppView) => {
     setActiveView(view);
   };
 
@@ -179,8 +191,8 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
       return <WelcomeScreen onSelectRole={(role) => handleSelectRole(role.toUpperCase() as 'TEACHER' | 'STUDENT')} />;
     }
     return (
-      <LoginPage 
-        vscode={vscode} 
+      <LoginPage
+        vscode={vscode}
         role={selectedRole}
         onBack={handleBackToRoleSelection}
       />
@@ -205,14 +217,14 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           <StudentDashboard vscode={vscode} user={user} apiService={apiService} />
         )}
       </div>
-      
+
       {/* Chat Window Overlay */}
       {chatOpen && chatConfig && user && (
         <div className="fixed bottom-5 right-5 z-[1000] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
           <ChatWindow
             vscode={vscode}
             apiService={apiService}
-            currentUserId={parseInt(user.userId)}
+            currentUserId={resolveUserId(user)}
             currentUserName={user.name}
             otherUserId={chatConfig.otherUserId}
             otherUserName={chatConfig.otherUserName}

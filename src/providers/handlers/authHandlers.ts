@@ -58,7 +58,8 @@ export async function handleGoogleLogin(
                                 email: loginResponse.email,
                                 userId: loginResponse.userId,
                                 name: loginResponse.name,
-                                role: loginResponse.role
+                                role: loginResponse.role,
+                                profilePicture: loginResponse.profilePicture
                             });
 
                             apiService.setToken(loginResponse.token);
@@ -98,7 +99,8 @@ export async function handleGoogleLogin(
                                     email: loginResponse.email,
                                     userId: loginResponse.userId,
                                     name: loginResponse.name,
-                                    role: loginResponse.role
+                                    role: loginResponse.role,
+                                    profilePicture: loginResponse.profilePicture
                                 },
                                 token: loginResponse.token
                             });
