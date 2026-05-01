@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import StudentList from './StudentList';
-import { StudentStatsCard } from './StudentStatsCard';
-import { CommitHeatmap } from './CommitHeatmap';
 import StudentForm from './StudentForm';
 import AssignmentList from './AssignmentList';
 import BottomNavigation from './BottomNavigation';
@@ -178,8 +175,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
 
   if (showJoinForm) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+      <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
+        <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
           <StudentForm
             vscode={vscode}
             user={user}
@@ -195,24 +192,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
 
   if (selectedClass && viewAssignments) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+      <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
+        <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
+
           {/* Header */}
-          <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
+          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+              <div className="w-7 h-7 text-vscode-link flex items-center justify-center rounded-sm">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
-              <div className="w-px h-4 bg-[#dbdfe6]"></div>
+              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>
+              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
               <button
                 onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
+                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
                 title="Đăng xuất"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,7 +220,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             </div>
           </header>
 
-          {/* Back Button and Class Info - Hidden when viewing assignment detail */}
+          {/* Back Button and Class Info */}
           {!isViewingAssignmentDetail && (
             <>
               <div className="px-4 py-4">
@@ -231,7 +229,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                     setViewAssignments(false);
                     setSelectedClass(null);
                   }}
-                  className="flex items-center gap-2 text-[#616f89] hover:text-[#111318] transition-colors text-sm font-medium"
+                  className="cursor-pointer flex items-center gap-2 text-vscode-desc hover:text-vscode-fg transition-colors text-sm font-medium outline-none focus:outline-none focus-visible:outline-none"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -240,9 +238,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                 </button>
               </div>
 
-              <div className="px-4 py-5 border-b border-[#dbdfe6]">
-                <h2 className="text-2xl font-bold tracking-tight text-[#111318] mb-1">{selectedClass.className}</h2>
-                <p className="text-sm text-[#616f89]">Mã lớp: <strong className="font-mono font-bold">{selectedClass.classCode}</strong></p>
+              <div className="px-4 py-5 border-b border-solid border-[var(--vscode-panel-border)]">
+                <h2 className="text-2xl font-bold tracking-tight text-vscode-fg mb-1">{selectedClass.className}</h2>
+                <p className="text-sm text-vscode-desc">Mã lớp: <strong className="font-mono font-bold text-vscode-fg">{selectedClass.classCode}</strong></p>
               </div>
             </>
           )}
@@ -271,18 +269,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
           <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
         </div>
       </div>
-    );
-  }
-
-  if (selectedClass) {
-    return (
-      <StudentList
-        vscode={vscode}
-        classItem={selectedClass}
-        currentUser={user}
-        userRole="STUDENT"
-        onBack={() => setSelectedClass(null)}
-      />
     );
   }
 
@@ -333,22 +319,23 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
         return (
           <>
             {/* Page Heading */}
-            <div className="pt-8 px-6 pb-6 border-b border-[#dbdfe6]">
+            <div className="pt-8 px-5 pb-5 border-b border-solid border-[var(--vscode-panel-border)]">
               <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-black leading-tight tracking-tight text-[#111318]">Dashboard</h2>
-                <p className="text-[#616f89] text-sm font-medium">Student Overview</p>
+                <h2 className="text-2xl font-black leading-tight tracking-tight text-vscode-fg">Dashboard</h2>
+                <p className="text-vscode-desc text-[13px] font-medium">Tổng quan sinh viên</p>
               </div>
             </div>
 
             {/* Main Content */}
-            <main className="flex-1 flex flex-col gap-8 pb-24 overflow-y-auto">
+            <main className="flex-1 flex flex-col gap-6 pb-24 overflow-y-auto">
+
               {/* Join Class Button */}
-              <section className="px-6 pt-6">
+              <section className="px-5 pt-5">
                 <button
                   onClick={() => setShowJoinForm(true)}
-                  className="w-full bg-[#135bec] text-white h-12 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                  className="cursor-pointer w-full bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] h-9 rounded-sm font-medium text-[13px] flex items-center justify-center gap-2 hover:bg-[var(--vscode-button-hoverBackground)] transition-colors active:scale-[0.98]"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Tham gia lớp học
@@ -356,25 +343,25 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
               </section>
 
               {/* My Classes Section */}
-              <section className="px-6">
-                <div className="flex items-center justify-between pb-4">
-                  <h3 className="text-lg font-bold leading-tight tracking-tight text-[#111318]">
+              <section className="px-5">
+                <div className="flex items-center justify-between pb-3">
+                  <h3 className="text-[14px] font-bold leading-tight tracking-tight text-vscode-fg">
                     Lớp học của tôi ({classes?.length || 0})
                   </h3>
                 </div>
 
                 {!classes || classes.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-[#616f89] mb-6 text-sm">Bạn chưa tham gia lớp học nào</p>
+                  <div className="text-center py-10 border border-dashed border-[var(--vscode-panel-border)] rounded-sm">
+                    <p className="text-vscode-desc mb-4 text-[13px]">Bạn chưa tham gia lớp học nào</p>
                     <button
                       onClick={() => setShowJoinForm(true)}
-                      className="px-8 py-3.5 bg-[#135bec] text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-opacity"
+                      className="cursor-pointer px-4 h-7 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-sm font-medium text-[13px] hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
                     >
-                      + Tham gia lớp học đầu tiên
+                      + Tham gia lớp đầu tiên
                     </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3"> {/* Tăng khoảng cách giữa các thẻ */}
                     {classes.map((classItem: any) => (
                       <div
                         key={classItem.classId}
@@ -382,49 +369,48 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                           setSelectedClass(classItem);
                           setViewAssignments(true);
                         }}
-                        className="group relative flex items-center justify-between p-4 bg-white rounded-2xl shadow-[0_8px_24px_rgba(17,19,24,0.10)] hover:shadow-[0_12px_30px_rgba(17,19,24,0.14)] transition-all cursor-pointer"
+                        // Cập nhật thẻ Class to và rộng rãi như Teacher Dashboard
+                        className="group relative flex flex-col p-5 border border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-editorWidget-background)] rounded-md hover:border-[var(--vscode-focusBorder)] hover:bg-vscode-hoverBg transition-all cursor-pointer"
                       >
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs font-bold text-[#616f89] uppercase tracking-widest">
-                            {classItem.classCode}
-                          </span>
-                          <h4 className="font-bold text-base text-[#111318]">{classItem.className}</h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="w-2 h-2 rounded-full bg-[#111318]"></span>
-                            <span className="text-xs text-[#616f89]">
-                              {classItem.assignmentCount || 0} Bài tập
-                            </span>
-                          </div>
-                        </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleLeaveClass(classItem);
                           }}
-                          className="p-2 text-[#dbdfe6] hover:text-red-600 transition-colors"
+                          className="absolute top-4 right-4 text-vscode-desc opacity-0 group-hover:opacity-100 hover:text-[var(--vscode-errorForeground)] transition-all p-1 rounded-sm hover:bg-vscode-bg"
                           title="Rời lớp"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                           </svg>
                         </button>
+
+                        <div className="pr-8">
+                          <span className="text-[10px] font-bold text-vscode-desc uppercase tracking-widest block mb-1">
+                            {classItem.classCode}
+                          </span>
+                          <h3 className="text-base font-bold leading-tight mb-4 text-vscode-fg">{classItem.className}</h3>
+
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-1.5 text-xs font-medium uppercase text-vscode-fg">
+                              <svg className="w-[16px] h-[16px] text-vscode-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              {classItem.assignmentCount || 0} BÀI TẬP
+                            </div>
+                            {/* Bỏ phần hiển thị studentCount vì đây là view của Sinh viên */}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </section>
-
-              {/* Activity Section */}
-              {classes && classes.length > 0 && (
-                <section className="px-6">
-                  <CommitHeatmap apiService={apiService} vscode={vscode} />
-                </section>
-              )}
             </main>
 
             {/* Footer */}
-            <footer className="p-6 border-t border-[#dbdfe6] flex justify-center bg-gray-50/50">
-              <span className="text-[10px] text-[#616f89] font-bold uppercase tracking-widest">
+            <footer className="p-4 border-t border-solid border-[var(--vscode-panel-border)] flex justify-center bg-transparent">
+              <span className="text-[10px] text-vscode-desc font-medium uppercase tracking-widest">
                 AutoGit VS Code Extension v1.0
               </span>
             </footer>
@@ -434,26 +420,26 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="flex flex-col min-h-screen max-w-[420px] w-full bg-white shadow-2xl">
+    <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
+      <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
 
-        {/* Header */}
+        {/* Header - Dùng sideBar-background và z-50 để đặc ruột */}
         {!isChatDetailOpen && (
-          <header className="flex items-center justify-between px-4 py-4 border-b border-[#dbdfe6]">
+          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+              <div className="w-7 h-7 text-vscode-link flex items-center justify-center rounded-sm">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Sinh viên'}</span>
-              <div className="w-px h-4 bg-[#dbdfe6]"></div>
+              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>
+              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
               <button
                 onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
+                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
                 title="Đăng xuất"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -195,21 +195,34 @@ ${reportBody}
 }
 
 async function showSubmitResultInVirtualDocument(response: any) {
-    const resultText =
+    const timeDisplay = response.time !== undefined && response.time !== null ? `${response.time} giây` : "N/A";
+    const memoryDisplay = response.memory !== undefined && response.memory !== null ? `${response.memory} KB` : "N/A";
+
+    let resultText =
         `=============================
-    KẾT QUẢ CHẤM ĐIỂM CHI TIẾT
+  KẾT QUẢ CHẤM ĐIỂM CHI TIẾT
 =============================
 Trạng thái     : ${response.status}
-Điểm số        : ${response.score} / 100
+Điểm số        : ${response.score} / 10
 Số test pass   : ${response.passedTestCases} / ${response.totalTestCases}
+Thời gian chạy : ${timeDisplay}
+Bộ nhớ sử dụng : ${memoryDisplay}
 
 -----------------------------
-Thời gian nộp bài: ${new Date().toLocaleString()}
+Thời gian nộp  : ${new Date().toLocaleString()}
 `;
+
+    if (response.errorMessage) {
+        resultText += `\n=============================\n`;
+        resultText += `CHI TIẾT LỖI (ERROR LOG):\n`;
+        resultText += `-----------------------------\n`;
+        resultText += `${response.errorMessage}\n`;
+        resultText += `=============================\n`;
+    }
 
     const document = await vscode.workspace.openTextDocument({
         content: resultText,
-        language: 'plaintext'
+        language: 'log'
     });
 
     await vscode.window.showTextDocument(document, {

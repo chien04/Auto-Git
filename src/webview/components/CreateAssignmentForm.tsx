@@ -295,42 +295,45 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
     e.target.style.height = `${Math.max(220, e.target.scrollHeight)}px`;
   };
 
+  // 1. Sửa lại Markdown Components để đồng bộ màu sắc VS Code
   const markdownPreviewComponents = {
-    h1: ({ children }: any) => <h1 className="mb-3 text-2xl font-extrabold tracking-tight text-[#111318]">{children}</h1>,
-    h2: ({ children }: any) => <h2 className="mb-2 mt-5 text-xl font-bold text-[#111318]">{children}</h2>,
-    h3: ({ children }: any) => <h3 className="mb-2 mt-4 text-lg font-bold text-[#111318]">{children}</h3>,
-    p: ({ children }: any) => <p className="mb-3 leading-7 text-[#424656]">{children}</p>,
-    ul: ({ children }: any) => <ul className="mb-3 ml-5 list-disc space-y-1 text-[#424656]">{children}</ul>,
-    ol: ({ children }: any) => <ol className="mb-3 ml-5 list-decimal space-y-1 text-[#424656]">{children}</ol>,
-    li: ({ children }: any) => <li className="leading-7">{children}</li>,
-    strong: ({ children }: any) => <strong className="font-bold text-[#111318]">{children}</strong>,
+    h1: ({ children }: any) => <h1 className="mb-3 text-xl font-bold tracking-tight text-vscode-fg border-b border-solid border-[var(--vscode-panel-border)] pb-1">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="mb-2 mt-5 text-lg font-bold text-vscode-fg">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="mb-2 mt-4 text-base font-bold text-vscode-fg">{children}</h3>,
+    p: ({ children }: any) => <p className="mb-3 text-[13px] leading-6 text-vscode-fg">{children}</p>,
+    ul: ({ children }: any) => <ul className="mb-3 ml-5 list-disc space-y-1 text-[13px] text-vscode-fg">{children}</ul>,
+    ol: ({ children }: any) => <ol className="mb-3 ml-5 list-decimal space-y-1 text-[13px] text-vscode-fg">{children}</ol>,
+    li: ({ children }: any) => <li className="leading-6">{children}</li>,
+    strong: ({ children }: any) => <strong className="font-bold text-vscode-fg">{children}</strong>,
     code: ({ inline, children }: any) => {
       if (inline) {
-        return <code className="rounded bg-[#ecedfa] px-1.5 py-0.5 font-mono text-[0.9em] text-[#135bec]">{children}</code>;
+        return <code className="rounded-sm bg-[var(--vscode-textCodeBlock-background)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--vscode-textPreformat-foreground)]">{children}</code>;
       }
-      return <pre className="mb-3 overflow-x-auto rounded-lg bg-[#191b24] p-4 text-sm text-white"><code>{children}</code></pre>;
+      return <pre className="mb-3 overflow-x-auto rounded-sm bg-[var(--vscode-textCodeBlock-background)] p-4 text-sm border border-solid border-[var(--vscode-panel-border)] text-vscode-fg"><code>{children}</code></pre>;
     }
   };
 
   return (
-    <div className="bg-[#f5f5f5] w-full relative">
-      <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto bg-white pb-36">
-        {/* HEADER */}
-        <header className="flex items-center justify-between px-4 py-4 shadow-[0_6px_18px_rgba(17,19,24,0.06)]">
+    // 2. Container chính: bg-vscode-bg phải bao phủ toàn bộ min-h-screen
+    <div className="font-vscode bg-vscode-bg text-vscode-fg min-h-screen flex justify-center w-full">
+      <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
+
+        {/* HEADER: Fix lỗi trong suốt bằng cách dùng màu nền đặc và z-50 */}
+        <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#135bec] flex items-center justify-center rounded">
-              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 48 48">
+            <div className="w-7 h-7 text-vscode-link flex items-center justify-center rounded">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 48 48">
                 <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
               </svg>
             </div>
-            <h1 className="text-lg font-bold tracking-tight text-[#111318]">AutoGit</h1>
+            <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[#111318]">{user?.name || 'Giáo viên'}</span>
-            <div className="w-px h-4 bg-[#dbdfe6]"></div>
+            <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
+            <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
             <button
               onClick={() => vscode.postMessage({ type: 'logout' })}
-              className="flex items-center justify-center p-1.5 rounded-full text-[#616f89] hover:text-red-600 hover:bg-gray-100 transition-colors"
+              className="cursor-pointer flex items-center justify-center p-1.5 rounded-md text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
               title="Đăng xuất"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,13 +343,15 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
           </div>
         </header>
 
-        <form onSubmit={handleSubmit} className="px-4 pt-6 pb-6 space-y-4">
+        {/* FORM CONTENT: Padding bottom 160px để không bị lấp bởi thanh Deadline */}
+        <form onSubmit={handleSubmit} className="px-5 pt-5 pb-[160px] space-y-5">
+
           {/* TÊN BÀI TẬP */}
-          <div className="bg-white rounded-2xl p-4 shadow-[0_8px_28px_rgba(17,19,24,0.08)]">
-            <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-2">Tên bài tập</label>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-vscode-fg">Tên bài tập</label>
             <input
               type="text"
-              className="w-full px-4 py-3 text-base bg-[#f7f9fc] rounded-xl text-black focus:ring-2 focus:ring-[#135bec]/20 focus:outline-none transition-all placeholder:text-[#9ca3af]"
+              className="flex w-full rounded-sm border border-solid border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none focus:border-[var(--vscode-focusBorder)] h-10 px-4 text-[13px] transition-all placeholder:text-vscode-desc"
               placeholder="Ví dụ: Bài tập tuần 1 - OOP"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -354,15 +359,15 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
           </div>
 
           {/* LIST TASKS */}
-          <div className="flex flex-wrap gap-3 items-start">
+          <div className="flex flex-wrap gap-2 items-start">
             {tasks.map((task) => (
-              <div key={task.id} className="relative">
+              <div key={task.id} className="flex items-stretch rounded-sm overflow-hidden border border-solid border-[var(--vscode-panel-border)]">
                 <button
                   type="button"
                   onClick={() => setActiveTaskId(task.id)}
-                  className={`pr-6 pl-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-tight whitespace-nowrap transition-colors ${task.id === activeTask?.id
-                    ? 'bg-[#e8f0ff] text-[#135bec] shadow-[0_4px_12px_rgba(19,91,236,0.18)]'
-                    : 'bg-[#f7f9fc] text-[#5a6478] shadow-[0_4px_10px_rgba(17,19,24,0.08)] hover:bg-[#f1f5fb]'
+                  className={`cursor-pointer px-3 py-1.5 text-[12px] font-medium uppercase transition-colors ${task.id === activeTask?.id
+                    ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]'
+                    : 'bg-[var(--vscode-input-background)] text-vscode-desc hover:bg-vscode-hoverBg'
                     }`}
                 >
                   {task.taskName}
@@ -370,185 +375,101 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); removeTask(task.id); }}
-                  className={`absolute top-1 right-1 w-4 h-4 text-[9px] rounded-full flex items-center justify-center transition-colors ${task.id === activeTask?.id
-                    ? 'bg-white text-[#135bec] shadow-[0_2px_8px_rgba(19,91,236,0.22)]'
-                    : 'bg-[#eef2f7] text-[#6b7280] shadow-[0_2px_8px_rgba(17,19,24,0.14)] hover:bg-[#e5edf7]'
+                  className={`cursor-pointer px-1.5 flex items-center justify-center border-l border-solid border-[var(--vscode-panel-border)] ${task.id === activeTask?.id
+                    ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-errorForeground)]'
+                    : 'bg-[var(--vscode-input-background)] text-vscode-desc hover:bg-[var(--vscode-errorForeground)] hover:text-white'
                     }`}
                 >
-                  x
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
             ))}
-            <button
-              type="button"
-              onClick={addTask}
-              className="w-7 h-7 flex items-center justify-center rounded-md bg-transparent text-[#135bec] hover:bg-[#eef4ff] transition-colors"
-            >
-              +
-            </button>
+            <button type="button" onClick={addTask} className="w-8 h-8 flex items-center justify-center rounded-sm border border-dashed border-[var(--vscode-panel-border)] text-vscode-link hover:bg-vscode-hoverBg font-bold">+</button>
           </div>
 
           {/* EDITOR SECTION */}
-          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_8px_28px_rgba(17,19,24,0.08)]">
-            <div className="px-4 pt-4 pb-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex p-1 bg-[#f3f4f6] rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => updateTaskById(activeTask!.id, t => ({ ...t, descriptionMode: 'write' }))}
-                    className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTask?.descriptionMode === 'write' ? 'bg-white text-[#135bec] shadow-sm' : 'text-[#616f89] hover:text-[#111318]'}`}
-                  >
-                    Soạn thảo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateTaskById(activeTask!.id, t => ({ ...t, descriptionMode: 'preview' }))}
-                    className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${activeTask?.descriptionMode === 'preview' ? 'bg-white text-[#135bec] shadow-sm' : 'text-[#616f89] hover:text-[#111318]'}`}
-                  >
-                    Xem trước
-                  </button>
-                </div>
-
-                {activeTask?.descriptionMode === 'write' && (
-                  <button
-                    type="button"
-                    onClick={() => setIsTcModalOpen(true)}
-                    className="text-sm font-semibold text-[#135bec] hover:underline"
-                  >
-                    Testcase mẫu
-                  </button>
-                )}
+          <div className="flex flex-col border border-solid border-[var(--vscode-panel-border)] rounded-sm bg-vscode-bg overflow-hidden">
+            <div className="flex items-center justify-between px-2 py-1.5 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-editorGroupHeader-tabsBackground)]">
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => updateTaskById(activeTask!.id, t => ({ ...t, descriptionMode: 'write' }))}
+                  className={`px-3 py-1 rounded-sm text-[12px] ${activeTask?.descriptionMode === 'write' ? 'bg-[var(--vscode-tab-activeBackground)] text-[var(--vscode-tab-activeForeground)]' : 'text-vscode-desc'}`}
+                > Soạn thảo </button>
+                <button
+                  type="button"
+                  onClick={() => updateTaskById(activeTask!.id, t => ({ ...t, descriptionMode: 'preview' }))}
+                  className={`px-3 py-1 rounded-sm text-[12px] ${activeTask?.descriptionMode === 'preview' ? 'bg-[var(--vscode-tab-activeBackground)] text-[var(--vscode-tab-activeForeground)]' : 'text-vscode-desc'}`}
+                > Xem trước </button>
               </div>
+              {activeTask?.descriptionMode === 'write' && (
+                <button type="button" onClick={() => setIsTcModalOpen(true)} className="text-[12px] text-vscode-link hover:underline px-2">+ Testcase</button>
+              )}
             </div>
-
-            <div className="p-4">
+            <div className="p-1">
               {activeTask?.descriptionMode === 'write' ? (
                 <textarea
-                  ref={descriptionRef}
-                  className="w-full min-h-[220px] px-4 py-3 text-sm bg-[#f7f9fc] rounded-xl text-black focus:ring-2 focus:ring-[#135bec]/20 focus:outline-none transition-all placeholder:text-[#9ca3af] resize-none overflow-hidden font-mono"
-                  placeholder="Nhập mô tả bài tập bằng Markdown tại đây..."
+                  className="w-full min-h-[220px] p-4 text-[13px] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none resize-none font-mono"
                   value={activeTask?.description || ''}
                   onChange={handleDescriptionChange}
                 />
               ) : (
-                <div className="min-h-[220px] px-4 py-3 bg-[#f7f9fc] rounded-xl text-sm leading-relaxed text-[#424656] overflow-x-auto markdown-preview">
-                  {(activeTask?.description || '').trim() ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
-                      {activeTask?.description || ''}
-                    </ReactMarkdown>
-                  ) : (
-                    <div className="text-[#9ca3af]">Chưa có nội dung mô tả. Hãy nhập Markdown ở chế độ Soạn thảo.</div>
-                  )}
+                <div className="min-h-[220px] p-4 bg-vscode-bg text-[13px] leading-relaxed markdown-preview">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
+                    {activeTask?.description || ''}
+                  </ReactMarkdown>
                 </div>
               )}
             </div>
-
-            {/* UPLOAD ZIP TEST CASES */}
-            <div className="px-4 pb-4 pt-1">
-              <label className="block text-sm font-bold uppercase tracking-wider text-[#616f89] mb-2">
-                Test cases {activeTask?.taskName || 'task'} (Chấm điểm ẩn)
-              </label>
-              <div className="relative">
-                <input type="file" accept=".zip" onChange={handleFileChange} className="hidden" id="testCasesFileInput" />
-                <label
-                  htmlFor="testCasesFileInput"
-                  className="flex flex-col items-center justify-center w-full px-4 py-6 rounded-xl cursor-pointer bg-[#f7f9fc] hover:bg-[#edf3ff] transition-colors shadow-[inset_0_0_0_1px_rgba(173,187,209,0.45),0_6px_16px_rgba(17,19,24,0.08)]"
-                >
-                  <svg className="w-10 h-10 text-[#616f89] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  {activeTask?.testCasesFile ? (
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-[#135bec]">{activeTask.testCasesFile.name}</p>
-                      <p className="text-xs text-[#616f89] mt-1">{(activeTask.testCasesFile.size / 1024).toFixed(2)} KB</p>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-[#616f89]">Click để chọn file ZIP</p>
-                    </div>
-                  )}
-                </label>
-              </div>
-            </div>
           </div>
 
-          {message && (
-            <div className="p-4 rounded-xl bg-[#135bec]/10 shadow-[0_8px_20px_rgba(19,91,236,0.15)]">
-              <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
-            </div>
-          )}
+          {/* UPLOAD ZIP */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[13px] font-medium text-vscode-fg">File Test Cases (.zip)</label>
+            <input type="file" accept=".zip" onChange={handleFileChange} className="hidden" id="testCasesFileInput" />
+            <label htmlFor="testCasesFileInput" className="flex flex-col items-center justify-center w-full p-6 rounded-sm cursor-pointer border border-dashed border-[var(--vscode-panel-border)] bg-[var(--vscode-input-background)] hover:bg-vscode-hoverBg">
+              <svg className="w-8 h-8 text-vscode-desc mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+              <span className="text-[13px]">{activeTask?.testCasesFile ? activeTask.testCasesFile.name : 'Click để tải lên file .zip'}</span>
+            </label>
+          </div>
         </form>
 
-        {/* BOTTOM FIXED BAR */}
-        <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/95 backdrop-blur-sm p-4 flex flex-col gap-4 z-30 shadow-[0_-10px_28px_rgba(17,19,24,0.14)]">
-          <div className="flex gap-3">
+        {/* BOTTOM DEADLINE BAR: Fix lỗi trong suốt bằng màu nền đặc và z-50 */}
+        <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-[var(--vscode-sideBar-background)] border-t border-solid border-[var(--vscode-panel-border)] p-4 flex flex-col gap-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
+          <div className="flex gap-4">
             <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-tight font-bold text-[#616f89]">Deadline date</label>
-              <input type="date" value={deadlineDate} onChange={(e) => setDeadlineDate(e.target.value)} className="w-full bg-[#f7f9fc] rounded-xl px-3 py-2 text-sm text-[#111318] focus:ring-2 focus:ring-[#135bec]/20 focus:outline-none" />
+              <label className="text-[11px] uppercase font-bold text-vscode-desc">Ngày Deadline</label>
+              <input type="date" value={deadlineDate} onChange={(e) => setDeadlineDate(e.target.value)} className="w-full bg-[var(--vscode-input-background)] border border-solid border-[var(--vscode-input-border)] rounded-sm px-3 py-1.5 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
             </div>
             <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-[10px] uppercase tracking-tight font-bold text-[#616f89]">Time (UTC)</label>
-              <input type="time" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)} className="w-full bg-[#f7f9fc] rounded-xl px-3 py-2 text-sm text-[#111318] focus:ring-2 focus:ring-[#135bec]/20 focus:outline-none" />
+              <label className="text-[11px] uppercase font-bold text-vscode-desc">Giờ (UTC)</label>
+              <input type="time" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)} className="w-full bg-[var(--vscode-input-background)] border border-solid border-[var(--vscode-input-border)] rounded-sm px-3 py-1.5 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
             </div>
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onClose} disabled={isSubmitting} className="flex-1 py-3 bg-[#eef2f9] text-[#111318] text-sm font-bold uppercase tracking-tight rounded-xl hover:bg-[#e2e9f4] transition-colors disabled:opacity-60">Hủy</button>
-            <button type="submit" onClick={handleCreateAssignment} disabled={isSubmitting} className="flex-[2] py-3 bg-[#135bec] text-white text-sm font-bold uppercase tracking-tight rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-70">
-              {isSubmitting ? 'Đang xử lý...' : 'Tạo assignment'}
-            </button>
+            <button onClick={onClose} className="flex-1 h-9 bg-transparent border border-solid border-[var(--vscode-button-secondaryBackground)] text-vscode-fg text-[13px] rounded-sm hover:bg-vscode-hoverBg">Hủy</button>
+            <button onClick={handleCreateAssignment} className="flex-[2] h-9 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-[13px] rounded-sm hover:bg-[var(--vscode-button-hoverBackground)] font-bold">Tạo Assignment</button>
           </div>
         </div>
 
-        {/* MODAL NHẬP TEST CASE MẪU */}
+        {/* MODAL TESTCASE */}
         {isTcModalOpen && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-              <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
-                <h3 className="font-bold text-[#111318]">Thêm Test Case Mẫu</h3>
-                <button onClick={() => setIsTcModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+          <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+            <div className="bg-[var(--vscode-editorWidget-background)] border border-solid border-[var(--vscode-widget-border)] rounded-sm w-full max-w-[380px] shadow-2xl p-4">
+              {/* Nội dung modal của bạn ở đây */}
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-[13px] font-bold uppercase text-vscode-fg">Thêm Testcase mẫu</span>
+                <button onClick={() => setIsTcModalOpen(false)} className="text-vscode-desc hover:text-vscode-fg">✕</button>
               </div>
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-[#616f89] mb-1">Dữ liệu đầu vào (Input)</label>
-                  <textarea
-                    className="w-full bg-[#f7f9fc] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#135bec]/20 font-mono"
-                    rows={3}
-                    value={tcInput}
-                    onChange={e => setTcInput(e.target.value)}
-                    placeholder="VD: 5"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#616f89] mb-1">Kết quả mong muốn (Output)</label>
-                  <textarea
-                    className="w-full bg-[#f7f9fc] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#135bec]/20 font-mono"
-                    rows={2}
-                    value={tcOutput}
-                    onChange={e => setTcOutput(e.target.value)}
-                    placeholder="VD: 120"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#616f89] mb-1">Giải thích (Tùy chọn)</label>
-                  <input
-                    type="text"
-                    className="w-full bg-[#f7f9fc] rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#135bec]/20"
-                    value={tcExplain}
-                    onChange={e => setTcExplain(e.target.value)}
-                    placeholder="VD: Vì 5! = 120"
-                  />
-                </div>
-              </div>
-              <div className="px-5 py-4 bg-gray-50 flex gap-2 justify-end">
-                <button onClick={() => setIsTcModalOpen(false)} className="px-4 py-2 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-200 transition-colors">Hủy</button>
-                <button onClick={handleAddTestCaseToMarkdown} className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#135bec] hover:opacity-90 transition-opacity">Chèn vào Markdown</button>
+              <div className="space-y-4">
+                <textarea value={tcInput} onChange={e => setTcInput(e.target.value)} placeholder="Input" className="w-full bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] p-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
+                <textarea value={tcOutput} onChange={e => setTcOutput(e.target.value)} placeholder="Output" className="w-full bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] p-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
+                <input value={tcExplain} onChange={e => setTcExplain(e.target.value)} placeholder="Giải thích" className="w-full h-8 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] px-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
+                <button onClick={handleAddTestCaseToMarkdown} className="w-full h-9 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-[13px] font-bold rounded-sm">Chèn vào Markdown</button>
               </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

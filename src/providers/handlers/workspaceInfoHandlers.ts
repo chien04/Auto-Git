@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createHash } from 'crypto';
 import { AiChatRequest, ApiService, FileContext } from '../../services/apiService';
+import { getCurrentAssignmentCodeFromWorkspace } from '../../utils/localWorkspaceStore';
 
 function getRelativeFilePath(uri: vscode.Uri): string {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
@@ -179,13 +180,16 @@ async function buildFileContext(filePath: string): Promise<FileContext | null> {
 
 export async function handleAskAiWithContext(
     apiService: ApiService,
+    context: vscode.ExtensionContext,
     message: string,
     contextFiles: string[] | undefined,
     postMessage: (message: any) => void
 ): Promise<void> {
     try {
-        const folder = vscode.workspace.workspaceFolders?.[0];
-        const workspaceName = folder ? folder.name : 'Unknown';
+        const userData = context.globalState.get<any>('user_data');
+        const assignmentCode = userData?.userId
+            ? (getCurrentAssignmentCodeFromWorkspace(context, String(userData.userId)) || '')
+            : '';
         const selectedFiles = Array.isArray(contextFiles) ? contextFiles : [];
         const dedupedFiles = Array.from(new Set(selectedFiles.map((item) => String(item || '').trim()).filter(Boolean)));
 
@@ -199,7 +203,7 @@ export async function handleAskAiWithContext(
 
         const payload: AiChatRequest = {
             message: String(message || ''),
-            workspace: workspaceName,
+            assignmentCode,
             files
         };
 

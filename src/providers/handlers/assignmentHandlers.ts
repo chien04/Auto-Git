@@ -145,33 +145,6 @@ export async function handleUploadTaskTestCasesZip(
     }
 }
 
-export async function handleUploadTestCasesZip(
-    deps: AssignmentHandlerDeps,
-    assignmentCode: string,
-    fileName: string,
-    fileContent: string
-): Promise<void> {
-    try {
-        vscode.window.showInformationMessage('Đang upload file ZIP test cases...');
-
-        const response = await deps.apiService.uploadTestCasesZip(assignmentCode, fileName, fileContent);
-        deps.postMessage({
-            command: 'uploadTestCasesSuccess',
-            data: response
-        });
-
-        vscode.window.showInformationMessage('Test cases đã được upload thành công!');
-        await openAssignmentFolderIfExists(deps, assignmentCode);
-    } catch (error: any) {
-        console.error('[DEBUG] Upload error:', error);
-        deps.postMessage({
-            command: 'uploadTestCasesError',
-            error: error.message
-        });
-        vscode.window.showErrorMessage(`Lỗi upload test cases: ${error.message}`);
-    }
-}
-
 export async function handleSkipTestCases(
     deps: AssignmentHandlerDeps,
     assignmentCode: string
@@ -210,15 +183,14 @@ export async function handleJoinAssignment(
             throw new Error('Không tìm thấy user hiện tại');
         }
 
-        const tempResponse = await deps.apiService.joinAssignment(assignmentCode, '');
+        const response = await deps.apiService.joinAssignment(assignmentCode, '');
 
-        const folderName = `${assignmentCode}-${tempResponse.branch.replace('student/', '')}`;
+        const folderName = `${assignmentCode}-${response.branch.replace('student/', '')}`;
         const relativePath = path.join('student', folderName);
         const clonePath = path.join(localPath, relativePath);
 
         console.log('[DEBUG] Calculated clone path:', clonePath);
 
-        const response = await deps.apiService.joinAssignment(assignmentCode, '');
 
         upsertRoom(localPath, userData.userId, assignmentCode, relativePath, response.repoUrl, response.branch);
 
@@ -507,12 +479,12 @@ export async function handleOpenAssignmentFolder(
         console.log('[DEBUG]   Current:', normalizedCurrent);
 
         if (normalizedCurrent === normalizedTarget) {
-            console.log('[DEBUG] ✅ Already in correct workspace');
+            console.log('[DEBUG] Already in correct workspace');
             vscode.window.showInformationMessage('Bạn đã đang ở workspace của bài tập này!');
             return;
         }
 
-        console.log('[DEBUG] ⚠️ Switching to workspace:', localPath);
+        console.log('[DEBUG] Switching to workspace:', localPath);
         markLastOpen(baseDirectory, userData.userId, assignmentCode);
         const uri = vscode.Uri.file(localPath);
         await deps.closeAllEditorsBeforeWorkspaceOpen();
@@ -640,54 +612,6 @@ export async function handleSyncAssignmentWorkspace(
     }
 }
 
-export async function handleSetupAssignmentWorkspace(
-    deps: AssignmentHandlerDeps,
-    assignmentCode: string,
-    title?: string
-): Promise<void> {
-    const assignmentTitle = title || assignmentCode;
-    const confirmed = await vscode.window.showWarningMessage(
-        `Setup workspace cho bài tập "${assignmentTitle}"?\n\nSẽ tạo worktrees cho tất cả sinh viên đã join.`,
-        { modal: true },
-        'Setup',
-        'Hủy'
-    );
-
-    if (confirmed !== 'Setup') {
-        return;
-    }
-
-    try {
-        const userData = deps.context.globalState.get<any>('user_data');
-        if (!userData?.userId) {
-            throw new Error('Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-        }
-
-        const baseDirectory = await ensureBaseDirectory(deps.context, userData.userId);
-        if (!baseDirectory) {
-            throw new Error('Cần chọn thư mục gốc để setup workspace.');
-        }
-
-        const roomData = getRoomData(baseDirectory, userData.userId, assignmentCode);
-        if (!roomData.found || !roomData.fullPath) {
-            throw new Error('Không tìm thấy assignment trong .coding-rooms.json để setup workspace.');
-        }
-
-        const result = await deps.apiService.setupAssignmentWorkspace(assignmentCode, roomData.fullPath);
-        deps.postMessage({
-            type: 'setupWorkspaceSuccess',
-            data: result
-        });
-        vscode.window.showInformationMessage(`${result.message}`);
-    } catch (error: any) {
-        deps.postMessage({
-            type: 'setupWorkspaceError',
-            error: error.message
-        });
-        vscode.window.showErrorMessage(`Lỗi setup: ${error.message}`);
-    }
-}
-
 export async function handleSyncTeacherWorkspaceBestEffort(
     deps: AssignmentHandlerDeps,
     assignmentCode: string,
@@ -810,10 +734,14 @@ function collectAllowedFiles(rootDir: string): VectorFileDTO[] {
                 const fileContent = fileBuffer.toString('utf8');
                 const hashcode = createHash('sha256').update(fileBuffer).digest('hex');
                 const relativePath = path.relative(rootDir, absolute).replace(/\\/g, '/');
+                const taskMatch = entry.name.match(/task(\d+)/i);
+
+                const taskOrderNo = taskMatch ? parseInt(taskMatch[1], 10) : 0;
                 collected.push({
                     fileName: relativePath,
                     fileContent,
-                    hashcode
+                    hashcode,
+                    taskOrderNo
                 });
             } catch {
                 // Skip unreadable/binary files quietly.

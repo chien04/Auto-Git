@@ -260,16 +260,16 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      {/* Search Section - Styled strictly like the mockup */}
+    <div className="flex h-full min-h-0 flex-col bg-vscode-bg">
+      {/* Search Section */}
       <div className="px-4 py-4">
         <div className="relative flex items-center">
-          <svg className="absolute left-3 w-[18px] h-[18px] text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="absolute left-3 w-[18px] h-[18px] text-vscode-desc" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
-            className="w-full bg-[#fafafa] border-none rounded-full py-2.5 pl-10 pr-4 text-sm font-medium focus:ring-1 focus:ring-black placeholder:text-neutral-400 outline-none transition-all"
+            className="w-full bg-vscode-iconBg border-none rounded-full py-2.5 pl-10 pr-4 text-sm font-medium focus:ring-1 focus:ring-vscode-focus text-vscode-fg placeholder:text-vscode-desc outline-none transition-all"
             placeholder="Search conversations..."
             value={searchQuery}
             onFocus={() => setIsSearchFocused(true)}
@@ -278,11 +278,8 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
           />
           {searchQuery && (
             <button
-              className="absolute right-3 text-neutral-400 hover:text-black transition-colors"
-              onClick={() => {
-                setSearchQuery('');
-                setIsSearchFocused(true);
-              }}
+              className="absolute right-3 text-vscode-desc hover:text-vscode-fg transition-colors"
+              onClick={() => { setSearchQuery(''); setIsSearchFocused(true); }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -293,41 +290,38 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
       </div>
 
       {/* Chat List Layout */}
-      <main className="w-full bg-white flex-grow flex flex-col pb-28 overflow-y-auto custom-scrollbar">
+      <main className="w-full bg-vscode-bg flex-grow flex flex-col pb-28 overflow-y-auto custom-scrollbar">
         {isSearchMode ? (
           isSearching ? (
             <div className="text-center py-12">
-              <p className="text-neutral-500 text-sm font-medium">Đang tìm người dùng...</p>
+              <p className="text-vscode-desc text-sm font-medium">Đang tìm người dùng...</p>
             </div>
           ) : searchResults.length > 0 ? (
             <div className="flex-grow">
-              <div className="px-4 py-2 bg-[#fafafa]">
-                <h2 className="font-bold text-[10px] tracking-widest uppercase text-neutral-500">Kết quả tìm kiếm</h2>
+              <div className="px-4 py-2 bg-vscode-iconBg">
+                <h2 className="font-bold text-[10px] tracking-widest uppercase text-vscode-desc">Kết quả tìm kiếm</h2>
               </div>
-              <div className="divide-y divide-neutral-50">
+              <div className="divide-y divide-[var(--vscode-widget-border)]">
                 {searchResults.map((member) => (
                   <div
                     key={`search-${member.userId}`}
-                    className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleOpenSearchResult(member);
-                    }}
+                    className="flex items-center justify-between px-4 py-4 hover:bg-vscode-hoverBg transition-colors active:scale-[0.98] cursor-pointer"
+                    onMouseDown={(e) => { e.preventDefault(); handleOpenSearchResult(member); }}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-neutral-200 flex items-center justify-center rounded-full shrink-0">
-                        <span className="font-extrabold text-neutral-600 text-sm">
+                      <div className="w-12 h-12 bg-vscode-iconBg flex items-center justify-center rounded-full shrink-0">
+                        <span className="font-extrabold text-vscode-desc text-sm">
                           {getInitials(member.userName)}
                         </span>
                       </div>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-black tracking-tight">{member.userName}</span>
-                          <span className="px-1.5 py-0.5 rounded bg-neutral-100 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">
+                          <span className="font-bold text-sm text-vscode-fg tracking-tight">{member.userName}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-vscode-iconBg text-[10px] font-bold text-vscode-desc uppercase tracking-tighter">
                             {member.role}
                           </span>
                         </div>
-                        <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">{member.className || 'Direct message'}</span>
+                        <span className="text-[12px] text-vscode-desc truncate mt-0.5 font-medium">{member.className || 'Direct message'}</span>
                       </div>
                     </div>
                   </div>
@@ -336,7 +330,7 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
             </div>
           ) : (
             <div className="text-center py-12">
-              <p className="text-neutral-500 text-sm font-medium">
+              <p className="text-vscode-desc text-sm font-medium">
                 {searchQuery.trim() ? 'Không tìm thấy người dùng' : 'Nhập tên hoặc email để tìm người dùng'}
               </p>
             </div>
@@ -344,11 +338,11 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
         ) : (
           /* Normal Chat List */
           <div className="flex-grow">
-            <div className="px-4 py-2 bg-[#fafafa]">
-              <h2 className="font-bold text-[10px] tracking-widest uppercase text-neutral-500">Tất cả</h2>
+            <div className="px-4 py-2 bg-vscode-iconBg">
+              <h2 className="font-bold text-[10px] tracking-widest uppercase text-vscode-desc">Tất cả</h2>
             </div>
 
-            <div className="divide-y divide-neutral-50">
+            <div className="divide-y divide-[var(--vscode-widget-border)]">
               {(() => {
                 const aiItem = {
                   ...AI_ASSISTANT,
@@ -364,19 +358,9 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
                   ...classrooms.map(c => {
                     const preview = classPreviews[c.id] || {};
                     const latestTime = preview.lastMessageTime || c.lastMessageTime;
-                    return {
-                      ...c,
-                      type: 'group',
-                      lastMessage: preview.lastMessage || c.lastMessage,
-                      lastMessageTime: latestTime,
-                      time: latestTime
-                    };
+                    return { ...c, type: 'group', lastMessage: preview.lastMessage || c.lastMessage, lastMessageTime: latestTime, time: latestTime };
                   }),
-                  ...recentPrivateChats.map(c => ({
-                    ...c,
-                    type: 'private',
-                    time: c.lastMessageTime
-                  }))
+                  ...recentPrivateChats.map(c => ({ ...c, type: 'private', time: c.lastMessageTime }))
                 ];
 
                 const sorted = merged.sort((a: any, b: any) => {
@@ -388,76 +372,74 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
 
                 return sorted.map((chat: any) => {
                   if (chat.type === 'group') {
-                    // GROUP CHAT ITEM
                     return (
                       <div
                         key={`group-${chat.id}`}
-                        className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                        className="flex items-center justify-between px-4 py-4 hover:bg-vscode-hoverBg transition-colors active:scale-[0.98] cursor-pointer"
                         onClick={() => handleOpenGroupChat(chat)}
                       >
                         <div className="flex items-center gap-4 min-w-0">
-                          <div className="w-12 h-12 bg-black flex items-center justify-center rounded-full shrink-0">
-                            <span className="font-extrabold text-white text-xs uppercase tracking-tighter">
+                          <div className="w-12 h-12 bg-vscode-activeBg flex items-center justify-center rounded-full shrink-0">
+                            <span className="font-extrabold text-vscode-activeFg text-xs uppercase tracking-tighter">
                               {getInitials(chat.className)}
                             </span>
                           </div>
                           <div className="flex flex-col min-w-0 pr-2">
-                            <span className="font-bold text-sm text-black tracking-tight truncate">
+                            <span className="font-bold text-sm text-vscode-fg tracking-tight truncate">
                               {chat.className}
                             </span>
-                            <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">
+                            <span className="text-[12px] text-vscode-desc truncate mt-0.5 font-medium">
                               {chat.lastMessage || `Class Group • ${chat.studentCount} members`}
                             </span>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="font-medium text-[10px] tracking-tight text-neutral-400 uppercase">
+                          <span className="font-medium text-[10px] tracking-tight text-vscode-desc uppercase">
                             {formatTime(chat.lastMessageTime) || 'MỚI'}
                           </span>
                           {chat.unreadCount && chat.unreadCount > 0 ? (
-                            <div className="w-2 h-2 bg-black rounded-full"></div>
+                            <div className="w-2 h-2 bg-vscode-link rounded-full"></div>
                           ) : null}
                         </div>
                       </div>
                     );
                   } else {
-                    // PRIVATE CHAT ITEM & AI
                     const isAI = chat.userId === AI_ASSISTANT_ID;
                     return (
                       <div
                         key={`private-${chat.userId}`}
-                        className="flex items-center justify-between px-4 py-4 hover:bg-neutral-50 transition-colors active:scale-[0.98] cursor-pointer"
+                        className="flex items-center justify-between px-4 py-4 hover:bg-vscode-hoverBg transition-colors active:scale-[0.98] cursor-pointer"
                         onClick={() => handleOpenPrivateChat(chat)}
                       >
                         <div className="flex items-center gap-4 min-w-0">
                           {isAI ? (
-                            <div className="w-12 h-12 border-2 border-black flex items-center justify-center rounded-full shrink-0">
-                              <Bot size={22} className="text-black" />
+                            <div className="w-12 h-12 border-2 border-vscode-link flex items-center justify-center rounded-full shrink-0">
+                              <Bot size={22} className="text-vscode-link" />
                             </div>
                           ) : (
-                            <div className="w-12 h-12 bg-[#f0f0f0] flex items-center justify-center rounded-full overflow-hidden shrink-0">
-                              <span className="font-extrabold text-neutral-600 text-sm">
+                            <div className="w-12 h-12 bg-vscode-iconBg flex items-center justify-center rounded-full overflow-hidden shrink-0">
+                              <span className="font-extrabold text-vscode-desc text-sm">
                                 {getInitials(chat.userName)}
                               </span>
                             </div>
                           )}
                           <div className="flex flex-col min-w-0 pr-2">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-black tracking-tight truncate">
+                              <span className="font-bold text-sm text-vscode-fg tracking-tight truncate">
                                 {chat.userName}
                               </span>
                             </div>
-                            <span className="text-[12px] text-neutral-500 truncate mt-0.5 font-medium">
+                            <span className="text-[12px] text-vscode-desc truncate mt-0.5 font-medium">
                               {chat.lastMessage || 'Bắt đầu trò chuyện'}
                             </span>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="font-medium text-[10px] tracking-tight text-neutral-400 uppercase">
+                          <span className="font-medium text-[10px] tracking-tight text-vscode-desc uppercase">
                             {formatTime(chat.lastMessageTime) || 'MỚI'}
                           </span>
                           {chat.unreadCount && chat.unreadCount > 0 ? (
-                            <div className="w-2 h-2 bg-black rounded-full"></div>
+                            <div className="w-2 h-2 bg-vscode-link rounded-full"></div>
                           ) : null}
                         </div>
                       </div>

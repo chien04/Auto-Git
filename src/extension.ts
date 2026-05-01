@@ -10,7 +10,6 @@ import {
 	checkGitInstalled,
 	notifyFrontendOfCurrentWorkspace,
 	restoreGitServiceState,
-	setupAutoPush,
 	tryOpenPendingNotificationFile
 } from './extension/runtimeLifecycle';
 
@@ -395,7 +394,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			ClassroomViewProvider.viewType,
-			classroomViewProvider
+			classroomViewProvider,
+			{
+				webviewOptions: {
+					retainContextWhenHidden: true
+				}
+			}
 		)
 	);
 
@@ -601,10 +605,6 @@ export async function activate(context: vscode.ExtensionContext) {
 		runCodeCommand,
 		submitCodeCommand
 	);
-
-	// Setup auto-push on save
-	setupAutoPush(context, runtimeDeps);
-	console.log('Auto-push listener registered');
 
 	// Restore git service state if student has joined a class
 	await restoreGitServiceState(context, runtimeDeps);

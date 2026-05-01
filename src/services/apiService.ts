@@ -49,40 +49,6 @@ export interface JoinAssignmentResponse {
     deadline?: string;
 }
 
-export interface StudentDashboard {
-    totalCommits: number;
-    lastCommitAt: string | null;
-    totalClasses: number;
-    activeClasses: number;
-}
-
-export interface TeacherDashboard {
-    totalStudents: number;
-    studentsSubmitted: number;
-    studentsNotSubmitted: number;
-    submittedPercentage: number;
-    notSubmittedPercentage: number;
-    averageCommitsPerStudent: number;
-    totalClasses: number;
-    activeClasses: number;
-}
-
-export interface CommitActivity {
-    dailyCommits: { [date: string]: number };
-}
-
-export interface ClassStatistics {
-    classId: number;
-    className: string;
-    classCode: string;
-    totalStudents: number;
-    studentsSubmitted: number;
-    studentsNotSubmitted: number;
-    submittedPercentage: number;
-    notSubmittedPercentage: number;
-    isActive: boolean;
-}
-
 export interface CreateCodeCommentRequest {
     assignmentCode: string;
     targetBranch: string;
@@ -126,7 +92,7 @@ export interface FileContext {
 
 export interface AiChatRequest {
     message: string;
-    workspace: string;
+    assignmentCode: string;
     files: FileContext[];
 }
 
@@ -134,6 +100,7 @@ export interface VectorFileDTO {
     fileName: string;
     fileContent: string;
     hashcode: string;
+    taskOrderNo?: number;
 }
 
 export interface VectorStudentAssignmentDTO {
@@ -146,6 +113,15 @@ export interface WorkspaceUploadRequest {
     studentAssignments: VectorStudentAssignmentDTO[];
 }
 
+export interface StudentSubmissionDTO {
+    studentId: number;
+    studentName: string;
+    studentCode: string;
+    email: string;
+    commitCount: number;
+    lastCommitAt: string | null;
+    score: number | null;
+}
 
 export class ApiService {
     private api: AxiosInstance;
@@ -230,14 +206,6 @@ export class ApiService {
         this.jwtToken = token;
     }
 
-    getToken(): string | null {
-        return this.jwtToken;
-    }
-
-    /**
-     * Initiate Google OAuth login
-     * Returns the authorization URL for the user to login
-     */
     async initiateGoogleLogin(): Promise<string> {
         try {
             const response = await this.api.get('/auth/google/url');
@@ -247,9 +215,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Exchange authorization code for JWT token
-     */
     async handleGoogleCallback(code: string, role: string): Promise<LoginResponse> {
         try {
             const response = await this.api.post('/auth/google/callback', { code, role });
@@ -303,25 +268,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Teacher: Upload test cases ZIP file
-     */
-    async uploadTestCasesZip(assignmentCode: string, fileName: string, fileContent: string): Promise<any> {
-        try {
-            const response = await this.api.post('/test-cases/upload-zip', {
-                assignmentCode,
-                fileName,
-                fileContent // base64 encoded
-            });
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to upload test cases ZIP: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Teacher: Upload many task ZIP files in one request
-     */
     async uploadTaskTestCasesZip(assignmentCode: string, tasks: UploadTaskZipPayload[]): Promise<any> {
         try {
             const response = await this.api.post('/test-cases/upload-task-zips', {
@@ -346,23 +292,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Update commit count for student assignment (called after push)
-     */
-    async updateAssignmentCommitCount(assignmentCode: string): Promise<void> {
-        try {
-            console.log('[API] Updating commit count for assignment:', assignmentCode);
-            await this.api.post(`/assignment/${assignmentCode}/update-commits`);
-            console.log('[API] ✅ Commit count updated successfully');
-        } catch (error: any) {
-            console.error('[API] Failed to update commit count:', error);
-            throw new Error(`Failed to update commit count: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Get all assignments in a class
-     */
     async getAssignments(classCode: string): Promise<any[]> {
         try {
             const response = await this.api.get(`/assignment/class/${classCode}`);
@@ -385,38 +314,11 @@ export class ApiService {
         }
     }
 
-    /**
-     * Delete an assignment
-     */
     async deleteAssignment(assignmentCode: string): Promise<void> {
         try {
             await this.api.delete(`/assignment/${assignmentCode}`);
         } catch (error: any) {
             throw new Error(`Failed to delete assignment: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Get class information
-     */
-    async getClassInfo(classCode: string): Promise<any> {
-        try {
-            const response = await this.api.get(`/class/${classCode}`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to get class info: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Get student branches for a class (for teachers)
-     */
-    async getStudentBranches(classCode: string): Promise<any> {
-        try {
-            const response = await this.api.get(`/class/${classCode}/students`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to get student branches: ${error.response?.data?.message || error.message}`);
         }
     }
 
@@ -440,9 +342,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Get my classes (both as teacher and student)
-     */
     async getMyClasses(): Promise<{ teacherClasses: any[], studentClasses: any[] }> {
         try {
             const response = await this.api.get('/class/my-classes');
@@ -452,9 +351,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Get students in a class
-     */
     async getStudents(classCode: string): Promise<any[]> {
         try {
             const response = await this.api.get(`/class/${classCode}/students`);
@@ -464,9 +360,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Delete a class (Teacher)
-     */
     async deleteClass(classCode: string): Promise<void> {
         console.log('apiService.deleteClass called with:', classCode);
         try {
@@ -479,9 +372,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Leave a class (Student)
-     */
     async leaveClass(classCode: string): Promise<void> {
         console.log('apiService.leaveClass called with:', classCode);
         try {
@@ -491,117 +381,6 @@ export class ApiService {
         } catch (error: any) {
             console.error('Leave class API error:', error);
             throw new Error(`Failed to leave class: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Get commits for a branch
-     */
-    async getCommits(classCode: string, branchName: string): Promise<any[]> {
-        try {
-            const encodedBranch = encodeURIComponent(branchName);
-            const response = await this.api.get(`/class/${classCode}/commits?branch=${encodedBranch}`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to get commits: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Get commit URL for viewing code
-     */
-    async getCommitUrl(classCode: string, branchName: string, commitSha: string): Promise<{ url: string }> {
-        try {
-            const encodedBranch = encodeURIComponent(branchName);
-            const response = await this.api.get(`/class/${classCode}/commit/${commitSha}?branch=${encodedBranch}`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to get commit URL: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    /**
-     * Setup workspace for class (Teacher only)
-     */
-    async setupWorkspace(classCode: string): Promise<{ workspaceFilePath: string; message: string }> {
-        try {
-            const response = await this.api.post(`/class/${classCode}/workspace/setup`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to setup workspace: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Check if workspace exists
-     */
-    async checkWorkspaceExists(classCode: string): Promise<boolean> {
-        try {
-            const response = await this.api.get(`/class/${classCode}/workspace/exists`);
-            return response.data.exists;
-        } catch (error: any) {
-            return false;
-        }
-    }
-
-    /**
-     * Update workspace (add new students)
-     */
-    async updateWorkspace(classCode: string): Promise<{ message: string }> {
-        try {
-            const response = await this.api.post(`/class/${classCode}/workspace/update`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to update workspace: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Get local path for class
-     */
-    async getLocalPath(classCode: string): Promise<{ localPath: string; role: string }> {
-        try {
-            const response = await this.api.get(`/class/${classCode}/localPath`);
-            return response.data;
-        } catch (error: any) {
-            throw new Error(`Failed to get local path: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Sync workspace - fetch and pull latest code (Teacher only)
-     */
-    async syncWorkspace(classCode: string): Promise<{ message: string }> {
-        try {
-            console.log('[API] Syncing workspace for class:', classCode);
-            console.log('[API] Request URL:', `${this.baseURL}/class/${classCode}/workspace/sync`);
-            console.log('[API] Token:', this.jwtToken ? 'Present' : 'Missing');
-
-            const response = await this.api.post(`/class/${classCode}/workspace/sync`);
-
-            console.log('[API] Sync workspace response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Sync workspace error:', error);
-            console.error('[API] Error response:', error.response?.data);
-            throw new Error(`Failed to sync workspace: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Setup assignment workspace (Teacher only)
-     */
-    async setupAssignmentWorkspace(assignmentCode: string, localPath?: string): Promise<{ message: string, workspacePath: string }> {
-        try {
-            console.log('[API] Setting up assignment workspace:', assignmentCode);
-            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/setup`, {
-                localPath: localPath || null
-            });
-            console.log('[API] Setup workspace response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Setup workspace error:', error);
-            throw new Error(`Failed to setup workspace: ${error.response?.data?.error || error.message}`);
         }
     }
 
@@ -619,22 +398,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Get assignment workspace path (Teacher only)
-     */
-    async getAssignmentWorkspacePath(assignmentCode: string): Promise<{ workspacePath: string, exists: boolean }> {
-        try {
-            const response = await this.api.get(`/assignment/${assignmentCode}/workspace/path`);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Get workspace path error:', error);
-            throw new Error(`Failed to get workspace path: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    /**
-     * Remove student from class (Teacher only)
-     */
     async removeStudent(classCode: string, studentId: string): Promise<{ message: string }> {
         try {
             const response = await this.api.delete(`/class/${classCode}/student/${studentId}`);
@@ -645,9 +408,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Check if deadline has passed for an assignment (Student)
-     */
     async checkDeadline(assignmentCode: string): Promise<{
         hasDeadline: boolean;
         deadline?: string;
@@ -663,62 +423,6 @@ export class ApiService {
         }
     }
 
-    /**
-     * Update commit count for student after push
-     */
-    async updateCommitCount(assignmentCode: string): Promise<{ commitCount: number; message: string }> {
-        try {
-            console.log('[API] Calling updateCommitCount for assignment:', assignmentCode);
-            console.log('[API] JWT Token exists:', !!this.jwtToken);
-
-            const response = await this.api.post(`/assignment/${assignmentCode}/update-commits`);
-
-            console.log('[API] Update commit count SUCCESS:', response.data);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Update commit count ERROR:', error);
-            console.error('[API] Error response:', error.response?.data);
-            console.error('[API] Error status:', error.response?.status);
-            // Don't throw - this is not critical
-            return { commitCount: 0, message: 'Failed to update: ' + (error.response?.data?.error || error.message) };
-        }
-    }
-
-    /**
-     * Get dashboard data for student
-     */
-    async getStudentDashboard(): Promise<StudentDashboard> {
-        const response = await this.api.get('/dashboard/student');
-        return response.data;
-    }
-
-    /**
-     * Get dashboard data for teacher
-     */
-    async getTeacherDashboard(): Promise<TeacherDashboard> {
-        const response = await this.api.get('/dashboard/teacher');
-        return response.data;
-    }
-
-    /**
-     * Get commit activity heatmap for student
-     */
-    async getStudentActivity(): Promise<CommitActivity> {
-        const response = await this.api.get('/dashboard/student/activity');
-        return response.data;
-    }
-
-    /**
-     * Get class statistics for teacher
-     */
-    async getTeacherClassStatistics(): Promise<ClassStatistics[]> {
-        const response = await this.api.get('/dashboard/teacher/classes');
-        return response.data;
-    }
-
-    /**
-     * Get assignment submissions (list of students with their submission info)
-     */
     async getAssignmentSubmissions(assignmentCode: string): Promise<StudentSubmissionDTO[]> {
         try {
             const response = await this.api.get(`/assignment/${assignmentCode}/submissions`);
@@ -780,8 +484,6 @@ export class ApiService {
         }
     }
 
-    // ===================== CHAT API =====================
-
     async getClassesWithMessages(): Promise<any[]> {
         const response = await this.api.get('/class/chat/classes-with-messages');
         return response.data || [];
@@ -821,8 +523,6 @@ export class ApiService {
     async uploadVectorDb(payload: WorkspaceUploadRequest): Promise<void> {
         await this.api.post('/ai/upload-vector-db', payload);
     }
-
-    // ===================== NOTIFICATION API =====================
 
     async getNotifications(): Promise<any[]> {
         const response = await this.api.get('/notifications');
@@ -874,12 +574,4 @@ export class ApiService {
     }
 }
 
-export interface StudentSubmissionDTO {
-    studentId: number;
-    studentName: string;
-    studentCode: string;
-    email: string;
-    commitCount: number;
-    lastCommitAt: string | null;
-    score: number | null;
-}
+

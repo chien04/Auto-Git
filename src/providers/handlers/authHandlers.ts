@@ -276,6 +276,7 @@ export async function handleLogout(
 ): Promise<void> {
     await context.globalState.update('jwt_token', undefined);
     await context.globalState.update('user_data', undefined);
+    await context.globalState.update('current_class', undefined);
     apiService.setToken(null);
 
     postMessage({

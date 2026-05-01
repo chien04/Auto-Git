@@ -147,42 +147,52 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
 
   const markdownPreviewComponents = {
     h1: ({ children }: { children?: React.ReactNode }) => (
-      <h1 className="mb-2 text-base font-bold tracking-tight text-[#111318]">{children}</h1>
+      <h1 className="mb-2 text-base font-bold tracking-tight text-vscode-fg border-b border-solid border-[var(--vscode-panel-border)] pb-1">{children}</h1>
     ),
     h2: ({ children }: { children?: React.ReactNode }) => (
-      <h2 className="mb-2 mt-3 text-[15px] font-bold text-[#111318]">{children}</h2>
+      <h2 className="mb-2 mt-3 text-[15px] font-bold text-vscode-fg">{children}</h2>
     ),
     h3: ({ children }: { children?: React.ReactNode }) => (
-      <h3 className="mb-1.5 mt-2.5 text-sm font-semibold text-[#111318]">{children}</h3>
+      <h3 className="mb-1.5 mt-2.5 text-sm font-semibold text-vscode-fg">{children}</h3>
     ),
     p: ({ children }: { children?: React.ReactNode }) => (
-      <p className="mb-2.5 text-[13px] leading-6 text-gray-700">{children}</p>
+      <p className="mb-2.5 text-[13px] leading-6 text-vscode-fg">{children}</p>
     ),
     ul: ({ children }: { children?: React.ReactNode }) => (
-      <ul className="mb-2.5 ml-5 list-disc space-y-1 text-[13px] text-gray-700">{children}</ul>
+      <ul className="mb-2.5 ml-5 list-disc space-y-1 text-[13px] text-vscode-fg">{children}</ul>
     ),
     ol: ({ children }: { children?: React.ReactNode }) => (
-      <ol className="mb-2.5 ml-5 list-decimal space-y-1 text-[13px] text-gray-700">{children}</ol>
+      <ol className="mb-2.5 ml-5 list-decimal space-y-1 text-[13px] text-vscode-fg">{children}</ol>
     ),
-    li: ({ children }: { children?: React.ReactNode }) => <li className="leading-7">{children}</li>,
+    li: ({ children }: { children?: React.ReactNode }) => (
+      <li className="leading-7">{children}</li>
+    ),
     strong: ({ children }: { children?: React.ReactNode }) => (
-      <strong className="font-bold text-[#111318]">{children}</strong>
+      <strong className="font-bold text-vscode-fg">{children}</strong>
     ),
     code: ({ inline, children }: { inline?: boolean; children?: React.ReactNode }) => {
       if (inline) {
         return (
-          <code className="rounded bg-[#ecedfa] px-1.5 py-0.5 font-mono text-[0.9em] text-[#135bec]">
+          // Inline code chuẩn VS Code: Nền xám mờ, chữ màu cam/đỏ gạch (tùy theme)
+          <code className="rounded-md bg-[var(--vscode-textCodeBlock-background)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--vscode-textPreformat-foreground)]">
             {children}
           </code>
         );
       }
 
       return (
-        <pre className="mb-3 overflow-x-auto rounded-lg bg-[#191b24] p-4 text-sm text-white">
-          <code>{children}</code>
+        // Block code chuẩn VS Code: Nền khối code đặc thù, có viền mỏng
+        <pre className="mb-3 overflow-x-auto rounded-md bg-[var(--vscode-textCodeBlock-background)] border border-solid border-[var(--vscode-panel-border)] p-4 text-sm text-vscode-fg">
+          <code className="font-mono">{children}</code>
         </pre>
       );
-    }
+    },
+    // Bổ sung thêm blockquote để đề phòng Markdown có trích dẫn
+    blockquote: ({ children }: { children?: React.ReactNode }) => (
+      <blockquote className="border-l-4 border-[var(--vscode-textBlockQuote-border)] bg-[var(--vscode-textBlockQuote-background)] px-3 py-1 mb-2.5 text-vscode-desc italic">
+        {children}
+      </blockquote>
+    ),
   };
 
   if (viewingResultFor) {
@@ -198,12 +208,15 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
   }
 
   return (
-    <div className="bg-white text-gray-900 min-h-screen flex justify-center">
-      <div className="w-full max-w-[420px] bg-white flex flex-col min-h-screen pb-5 shadow-[0_12px_30px_rgba(17,19,24,0.10)]">
-        <div className="px-4 py-3">
+    // Đồng bộ font, màu nền, màu chữ cho toàn bộ trang
+    <div className="font-vscode bg-vscode-bg text-vscode-fg min-h-screen flex justify-center">
+      <div className="w-full max-w-[420px] flex flex-col min-h-screen pb-5">
+
+        {/* Back Button */}
+        <div className="px-4 py-4">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors text-sm font-medium"
+            className="cursor-pointer flex items-center gap-2 text-vscode-desc hover:text-vscode-fg transition-colors text-sm font-medium outline-none focus:outline-none focus-visible:outline-none"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -214,26 +227,29 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
 
         <main className="flex flex-col flex-1">
           <div className="px-4 py-4 space-y-4">
-            <div className="bg-white rounded-2xl p-4 shadow-[0_8px_28px_rgba(17,19,24,0.08)] border border-[#eef2f9]">
+
+            {/* Header Info Card */}
+            <div className="rounded-md p-4 border border-solid border-[var(--vscode-panel-border)] bg-vscode-bg">
               <div className="flex items-center justify-between mb-1">
                 {assignment.className && (
-                  <h1 className="text-xl font-bold text-black">
+                  <h1 className="text-xl font-bold text-vscode-fg">
                     {assignment.className}
                   </h1>
                 )}
                 <div className="flex items-center gap-2">
-                  {/* Nút Kết quả hiển thị cho Sinh viên */}
+                  {/* Nút Kết quả hiển thị cho Sinh viên (Secondary Button) */}
                   {!isTeacher && (
                     <button
                       onClick={() => { handleViewResult() }}
-                      className="bg-white text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-semibold hover:bg-gray-50 transition-colors"
+                      className="cursor-pointer bg-transparent text-vscode-fg border border-solid border-[var(--vscode-button-secondaryBackground)] px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-vscode-hoverBg transition-colors"
                     >
                       Kết quả
                     </button>
                   )}
+                  {/* Nút Primary */}
                   <button
                     onClick={handleOpenWorkspace}
-                    className="bg-[#135bec] text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-800 transition-colors"
+                    className="cursor-pointer bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 hover:bg-[var(--vscode-button-hoverBackground)] transition-colors active:scale-[0.98]"
                   >
                     {isTeacher ? 'Đồng bộ & mở' : 'Mở'}
                   </button>
@@ -241,121 +257,126 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
               </div>
 
               {assignment.classCode && (
-                <p className="text-sm text-gray-600 mb-2.5">
-                  Mã lớp: <span className="font-semibold">{assignment.classCode}</span>
+                <p className="text-sm text-vscode-desc mb-2.5">
+                  Mã lớp: <span className="font-semibold text-vscode-fg">{assignment.classCode}</span>
                 </p>
               )}
 
-              <h2 className="text-lg font-bold text-black mb-3">
+              <h2 className="text-lg font-bold text-vscode-fg mb-3">
                 {assignment.title}
               </h2>
 
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-sm text-vscode-desc">
                 <span>Deadline: {new Date(assignment.deadline).toLocaleDateString('vi-VN')}</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3 items-start">
+            {/* Task Tabs */}
+            <div className="flex flex-wrap gap-2 items-start">
               {normalizedTasks.map((task) => (
                 <button
                   key={task.id}
                   type="button"
                   onClick={() => setActiveTaskId(task.id)}
-                  className={`pr-3 pl-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-tight whitespace-nowrap transition-colors ${task.id === activeTask?.id
-                    ? 'bg-[#e8f0ff] text-[#135bec] border border-[#d6e4ff]'
-                    : 'bg-[#f7f9fc] text-[#5a6478] border border-[#e7edf6] hover:bg-[#f1f5fb]'
+                  // Style Tab chuẩn VS Code
+                  className={`cursor-pointer px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-tight whitespace-nowrap transition-colors border border-solid ${task.id === activeTask?.id
+                    ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-[var(--vscode-button-background)]'
+                    : 'bg-transparent text-vscode-desc border-[var(--vscode-panel-border)] hover:bg-vscode-hoverBg hover:text-vscode-fg'
                     }`}
                 >
-                  {task.taskName}
+                  {`Task ${task.orderNo}`}
                 </button>
               ))}
             </div>
 
-            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_8px_28px_rgba(17,19,24,0.08)] border border-[#eef2f9]">
-
-              <div className="p-4 text-sm leading-relaxed markdown-preview">
+            {/* Markdown Preview Area */}
+            <div className="rounded-md overflow-hidden border border-solid border-[var(--vscode-panel-border)] bg-vscode-bg">
+              <div className="p-4 text-sm leading-relaxed markdown-preview text-vscode-fg">
                 {(activeTask?.description || '').trim() ? (
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownPreviewComponents}>
                     {activeTask?.description || ''}
                   </ReactMarkdown>
                 ) : (
-                  <p className="text-gray-700">Không có mô tả</p>
+                  <p className="text-vscode-desc">Không có mô tả</p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* {isTeacher && ( */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-100">
-              <h3 className="text-sm font-bold tracking-tight text-black">
-                Danh sách nộp bài ({submissions.length})
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportExcel}
-                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-white text-gray-700 shadow-[0_4px_12px_rgba(17,19,24,0.14)] hover:bg-gray-50 transition-colors"
-                  title="Xuất file Excel"
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={loadSubmissions}
-                  className="h-8 w-8 inline-flex items-center justify-center rounded-md bg-white text-gray-700 shadow-[0_4px_12px_rgba(17,19,24,0.14)] hover:bg-gray-50 transition-colors"
-                  title="Tải lại danh sách"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
+          {isTeacher && (
+            <div className="mt-2">
+              <div className="flex items-center justify-between px-6 py-3 border-b border-solid border-[var(--vscode-panel-border)]">
+                <h3 className="text-sm font-bold tracking-tight text-vscode-fg">
+                  Danh sách nộp bài ({submissions.length})
+                </h3>
+                <div className="flex items-center gap-1">
+                  {/* Icon Buttons phẳng */}
+                  <button
+                    onClick={handleExportExcel}
+                    className="cursor-pointer h-8 w-8 inline-flex items-center justify-center rounded-md bg-transparent text-vscode-desc hover:text-vscode-fg hover:bg-vscode-hoverBg transition-colors"
+                    title="Xuất file Excel"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={loadSubmissions}
+                    className="cursor-pointer h-8 w-8 inline-flex items-center justify-center rounded-md bg-transparent text-vscode-desc hover:text-vscode-fg hover:bg-vscode-hoverBg transition-colors"
+                    title="Tải lại danh sách"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {loading ? (
-              <div className="text-center py-12 text-zinc-500 text-[13px]">
-                Đang tải dữ liệu...
-              </div>
-            ) : (
-              <div className="w-full overflow-hidden">
-                {submissions.length === 0 ? (
-                  <div className="text-center py-12 text-zinc-500 text-[13px]">
-                    Chưa có sinh viên nộp bài
-                  </div>
-                ) : (
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="bg-zinc-50">
-                        <th className="px-6 py-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-100">
-                          Họ và tên
-                        </th>
-                        <th className="px-6 py-3 text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-100 text-right">
-                          Điểm
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100/50">
-                      {submissions.map((submission, index) => (
-                        <tr key={submission.studentId || index}
-                          className="hover:bg-zinc-50 transition-colors group cursor-pointer"
-                          onClick={() => handleTeacherViewResult(submission)}
-                        >
-                          <td className="px-6 py-4">
-                            <span className="text-[13px] font-bold text-black group-hover:underline cursor-pointer">
-                              {submission.studentName}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <span className="text-[13px] font-bold text-black">
-                              {formatScore(submission.score)}
-                            </span>
-                          </td>
+              {loading ? (
+                <div className="text-center py-12 text-vscode-desc text-[13px]">
+                  Đang tải dữ liệu...
+                </div>
+              ) : (
+                <div className="w-full overflow-hidden">
+                  {submissions.length === 0 ? (
+                    <div className="text-center py-12 text-vscode-desc text-[13px]">
+                      Chưa có sinh viên nộp bài
+                    </div>
+                  ) : (
+                    <table className="w-full border-collapse text-left">
+                      <thead>
+                        <tr>
+                          <th className="px-6 py-3 text-[10px] font-bold text-vscode-desc uppercase tracking-widest border-b border-solid border-[var(--vscode-panel-border)]">
+                            Họ và tên
+                          </th>
+                          <th className="px-6 py-3 text-[10px] font-bold text-vscode-desc uppercase tracking-widest border-b border-solid border-[var(--vscode-panel-border)] text-right">
+                            Điểm
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-          </div>
-          {/* )} */}
+                      </thead>
+                      {/* Bảng danh sách chuẩn */}
+                      <tbody className="divide-y divide-[var(--vscode-panel-border)]">
+                        {submissions.map((submission, index) => (
+                          <tr
+                            key={submission.studentId || index}
+                            className="hover:bg-[var(--vscode-list-hoverBackground)] transition-colors group cursor-pointer"
+                            onClick={() => handleTeacherViewResult(submission)}
+                          >
+                            <td className="px-6 py-3.5">
+                              <span className="text-[13px] font-medium text-vscode-fg group-hover:text-vscode-link group-hover:underline cursor-pointer">
+                                {submission.studentName}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3.5 text-right">
+                              <span className="text-[13px] font-bold text-vscode-fg">
+                                {formatScore(submission.score)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>

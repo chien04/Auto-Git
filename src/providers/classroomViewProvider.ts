@@ -22,11 +22,6 @@ import {
     handleResolveCodeComment
 } from './handlers/commentHandlers';
 import {
-    handleGetStudentActivity,
-    handleGetStudentDashboard,
-    handleGetTeacherClassStatistics
-} from './handlers/dashboardHandlers';
-import {
     handleAskAiWithContext,
     handleGetCurrentWorkspace,
     handleOpenChatContextFile,
@@ -51,10 +46,7 @@ import {
     handleVerifyOTP
 } from './handlers/authHandlers';
 import {
-    handleOpenClassFolder,
-    handleOpenWorkspace,
-    handleSelectFolder,
-    handleSyncWorkspace
+    handleSelectFolder
 } from './handlers/workspaceHandlers';
 import {
     AssignmentHandlerDeps,
@@ -69,12 +61,10 @@ import {
     handleOpenAssignmentFolder,
     handleOpenStudentAssignment,
     handleOpenTeacherAssignment,
-    handleSetupAssignmentWorkspace,
     handleSkipTestCases,
     handleSyncAssignmentWorkspace,
     handleSyncTeacherWorkspaceBestEffort,
     handleUploadTaskTestCasesZip,
-    handleUploadTestCasesZip,
     handleViewAssignment,
     viewTaskResult
 } from './handlers/assignmentHandlers';
@@ -207,10 +197,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 );
                 break;
 
-            case 'uploadTestCasesZip':
-                await this._handleUploadTestCasesZip(message.assignmentCode, message.fileName, message.fileContent);
-                break;
-
             case 'uploadTaskTestCasesZip':
                 await this._handleUploadTaskTestCasesZip(message.assignmentCode, message.tasks);
                 break;
@@ -259,28 +245,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleGetCurrentWorkspace();
                 break;
 
-            case 'openWorkspace':
-                await this._handleOpenWorkspace(message.classCode);
-                break;
-
-            case 'syncWorkspace':
-                await this._handleSyncWorkspace(message.classCode);
-                break;
-
             case 'removeStudent':
                 await this._handleRemoveStudent(message.classCode, message.studentId, message.studentName);
-                break;
-
-            case 'openClassFolder':
-                await this._handleOpenClassFolder(message.classCode);
-                break;
-
-            case 'loadCommits':
-                await this._handleLoadCommits(message.classCode, message.branchName);
-                break;
-
-            case 'viewCode':
-                await this._handleViewCode(message.classCode, message.branchName, message.commitSha);
                 break;
 
             case 'copyToClipboard':
@@ -319,24 +285,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleSyncAssignmentWorkspace(message.assignmentCode);
                 break;
 
-            case 'setupAssignmentWorkspace':
-                await this._handleSetupAssignmentWorkspace(message.assignmentCode, message.title);
-                break;
-
             case 'deleteAssignment':
                 await this._handleDeleteAssignment(message.assignmentCode, message.title);
-                break;
-
-            case 'getTeacherClassStatistics':
-                await this._handleGetTeacherClassStatistics();
-                break;
-
-            case 'getStudentDashboard':
-                await this._handleGetStudentDashboard();
-                break;
-
-            case 'getStudentActivity':
-                await this._handleGetStudentActivity();
                 break;
 
             case 'createCodeComment':
@@ -469,10 +419,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleCreateAssignment(this._getAssignmentHandlerDeps(), classCode, title, description, deadline, tasks);
     }
 
-    private async _handleUploadTestCasesZip(assignmentCode: string, fileName: string, fileContent: string) {
-        await handleUploadTestCasesZip(this._getAssignmentHandlerDeps(), assignmentCode, fileName, fileContent);
-    }
-
     private async _handleUploadTaskTestCasesZip(assignmentCode: string, tasks: any[]) {
         await handleUploadTaskTestCasesZip(this._getAssignmentHandlerDeps(), assignmentCode, tasks || []);
     }
@@ -508,20 +454,8 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleOpenAssignmentFolder(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
-    private async _handleOpenWorkspace(classCode: string) {
-        await handleOpenWorkspace(this.apiService, classCode, () => this._closeAllEditorsBeforeWorkspaceOpen());
-    }
-
-    private async _handleSyncWorkspace(classCode: string) {
-        await handleSyncWorkspace(this.apiService, classCode);
-    }
-
     private async _handleRemoveStudent(classCode: string, studentId: string, studentName: string) {
         await handleRemoveStudent(this.apiService, classCode, studentId, studentName, (message) => this._postMessage(message));
-    }
-
-    private async _handleOpenClassFolder(classCode: string) {
-        await handleOpenClassFolder(this.apiService, classCode, () => this._closeAllEditorsBeforeWorkspaceOpen());
     }
 
     private _postMessage(message: any) {
@@ -546,29 +480,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleLeaveClass(this.apiService, classCode, className, branchName, (message) => this._postMessage(message));
     }
 
-    private async _handleLoadCommits(classCode: string, branchName: string) {
-        try {
-            const response = await this.apiService.getCommits(classCode, branchName);
-
-            this._postMessage({
-                type: 'commitsLoaded',
-                commits: response
-            });
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Lỗi tải commits: ${error.message}`);
-        }
-    }
-
-    private async _handleViewCode(classCode: string, branchName: string, commitSha: string) {
-        try {
-            // Open GitHub commit URL in browser
-            const response = await this.apiService.getCommitUrl(classCode, branchName, commitSha);
-            await vscode.env.openExternal(vscode.Uri.parse(response.url));
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Lỗi xem code: ${error.message}`);
-        }
-    }
-
     private async _handleGetAssignments(classCode: string) {
         await handleGetAssignments(this._getAssignmentHandlerDeps(), classCode);
     }
@@ -589,28 +500,12 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleSyncAssignmentWorkspace(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
-    private async _handleSetupAssignmentWorkspace(assignmentCode: string, title?: string) {
-        await handleSetupAssignmentWorkspace(this._getAssignmentHandlerDeps(), assignmentCode, title);
-    }
-
     private async _syncTeacherWorkspaceBestEffort(assignmentCode: string, userData: any) {
         await handleSyncTeacherWorkspaceBestEffort(this._getAssignmentHandlerDeps(), assignmentCode, userData);
     }
 
     private async _handleDeleteAssignment(assignmentCode: string, title?: string) {
         await handleDeleteAssignment(this._getAssignmentHandlerDeps(), assignmentCode, title);
-    }
-
-    private async _handleGetTeacherClassStatistics() {
-        await handleGetTeacherClassStatistics(this.apiService, (message) => this._postMessage(message));
-    }
-
-    private async _handleGetStudentDashboard() {
-        await handleGetStudentDashboard(this.apiService, (message) => this._postMessage(message));
-    }
-
-    private async _handleGetStudentActivity() {
-        await handleGetStudentActivity(this.apiService, (message) => this._postMessage(message));
     }
 
     private async _handleCreateCodeComment(payload: any) {
@@ -670,53 +565,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         return text;
     }
 
-    public async handleAutoPush(classInfo?: any): Promise<boolean> {
-        try {
-            if (this.gitService.isAutoPushEnabled()) {
-                console.log('[ClassroomViewProvider] Starting auto-push...');
-                const pushed = await this.gitService.autoPush();
-                console.log('[ClassroomViewProvider] Auto-push completed. pushed =', pushed);
-
-                if (!pushed) {
-                    return false;
-                }
-
-                // Update commit count after successful push
-                console.log('[ClassroomViewProvider] ClassInfo received:', classInfo);
-
-                const assignmentCode = classInfo?.assignmentCode || this.gitService.getAssignmentCode();
-
-                if (assignmentCode) {
-                    console.log('[ClassroomViewProvider] Calling updateCommitCount for assignment:', assignmentCode);
-                    try {
-                        const result = await this.apiService.updateCommitCount(assignmentCode);
-                        console.log('[ClassroomViewProvider] Commit count updated:', result);
-                    } catch (error) {
-                        console.error('[ClassroomViewProvider] Failed to update commit count (non-critical):', error);
-                    }
-                } else {
-                    console.warn('[ClassroomViewProvider] Cannot update commit count - no assignmentCode found');
-                }
-
-                this._postMessage({
-                    command: 'pushSuccess'
-                });
-
-                return true;
-            }
-
-            return false;
-        } catch (error: any) {
-            console.error('[ClassroomViewProvider] Auto-push error:', error);
-            this._postMessage({
-                command: 'pushError',
-                error: error.message
-            });
-            // Re-throw error so extension.ts can handle it
-            throw error;
-        }
-    }
-
     public notifyWorkspaceChanged(assignmentCode: string) {
         notifyWorkspaceChanged(assignmentCode, (message) => this._postMessage(message));
     }
@@ -764,7 +612,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async _handleAskAiWithContext(message: string, contextFiles?: string[]) {
-        await handleAskAiWithContext(this.apiService, message, contextFiles, (payload) => this._postMessage(payload));
+        await handleAskAiWithContext(this.apiService, this._context, message, contextFiles, (payload) => this._postMessage(payload));
     }
 
     private async _handleGetNotifications() {

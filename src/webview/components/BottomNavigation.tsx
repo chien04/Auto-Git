@@ -7,14 +7,14 @@ interface BottomNavigationProps {
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabChange }) => {
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] bg-white border-t border-[#dbdfe6] flex items-center justify-around px-2 py-2.5 z-20">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] font-vscode bg-[var(--vscode-sideBar-background)] border-t border-solid border-[var(--vscode-panel-border)] flex items-center justify-around px-2 py-2.5 z-50">
 
       {/* Tab Dashboard */}
       <button
         onClick={() => onTabChange('dashboard')}
-        className={`flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 ${activeTab === 'dashboard'
-          ? 'border-[#111318] text-[#111318]'
-          : 'border-transparent text-[#9ca3af] hover:text-[#111318]'
+        className={`cursor-pointer flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 border-solid ${activeTab === 'dashboard'
+          ? 'border-[var(--vscode-focusBorder)] text-vscode-fg'
+          : 'border-transparent text-vscode-desc hover:text-vscode-fg'
           }`}
       >
         <LayoutDashboard className="w-6 h-6" strokeWidth={2} />
@@ -24,9 +24,9 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabCha
       {/* Tab Chat */}
       <button
         onClick={() => onTabChange('chat')}
-        className={`flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 ${activeTab === 'chat'
-          ? 'border-[#111318] text-[#111318]'
-          : 'border-transparent text-[#9ca3af] hover:text-[#111318]'
+        className={`cursor-pointer flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 border-solid ${activeTab === 'chat'
+          ? 'border-[var(--vscode-focusBorder)] text-vscode-fg'
+          : 'border-transparent text-vscode-desc hover:text-vscode-fg'
           }`}
       >
         <MessageCircle className="w-6 h-6" strokeWidth={2} />
@@ -36,15 +36,15 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabCha
       {/* Tab Notification */}
       <button
         onClick={() => onTabChange('notification')}
-        className={`flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 ${activeTab === 'notification'
-          ? 'border-[#111318] text-[#111318]'
-          : 'border-transparent text-[#9ca3af] hover:text-[#111318]'
+        className={`cursor-pointer flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 border-solid ${activeTab === 'notification'
+          ? 'border-[var(--vscode-focusBorder)] text-vscode-fg'
+          : 'border-transparent text-vscode-desc hover:text-vscode-fg'
           }`}
       >
         <div className="relative">
           <Bell className="w-6 h-6" strokeWidth={2} />
-          {/* Chấm tròn thông báo chưa đọc */}
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#111318]"></span>
+          {/* Chấm tròn thông báo chưa đọc - Dùng màu Badge chuẩn của VS Code */}
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[var(--vscode-activityBarBadge-background)]"></span>
         </div>
         <span className="text-[10px] font-bold uppercase tracking-wider">Notif</span>
       </button>
@@ -52,9 +52,9 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabCha
       {/* Tab Settings */}
       <button
         onClick={() => onTabChange('settings')}
-        className={`flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 ${activeTab === 'settings'
-          ? 'border-[#111318] text-[#111318]'
-          : 'border-transparent text-[#9ca3af] hover:text-[#111318]'
+        className={`cursor-pointer flex-1 flex flex-col items-center gap-1 pt-1 pb-0.5 transition-colors border-b-2 border-solid ${activeTab === 'settings'
+          ? 'border-[var(--vscode-focusBorder)] text-vscode-fg'
+          : 'border-transparent text-vscode-desc hover:text-vscode-fg'
           }`}
       >
         <Settings className="w-6 h-6" strokeWidth={2} />

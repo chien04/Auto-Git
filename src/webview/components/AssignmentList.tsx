@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import AssignmentDetail from './AssignmentDetail';
 
 interface AssignmentListProps {
@@ -86,8 +86,8 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
     }
   }, [initialAssignmentCode, loading, selectedAssignment, assignments, onInitialAssignmentHandled]);
 
-  // Notify parent when view changes
-  useEffect(() => {
+  // Keep parent header/back-button state in sync before paint to avoid flicker.
+  useLayoutEffect(() => {
     if (onViewChange) {
       onViewChange(!!selectedAssignment);
     }
@@ -139,52 +139,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
     });
   };
 
-  const handleViewAssignmentFolder = (assignment: Assignment) => {
-    vscode.postMessage({
-      type: 'openAssignmentFolder',
-      assignmentCode: assignment.assignmentCode
-    });
-  };
-
-  const handleViewAssignment = (assignment: Assignment) => {
-    vscode.postMessage({
-      type: 'viewAssignment',
-      assignmentCode: assignment.assignmentCode
-    });
-  };
-
-  const handleOpenTeacherAssignment = (assignment: Assignment) => {
-    vscode.postMessage({
-      type: 'openTeacherAssignment',
-      assignmentCode: assignment.assignmentCode
-    });
-  };
-
-  const handleSyncWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
-    event.stopPropagation();
-
-    // Check if this is the currently opened workspace
-    if (activeAssignmentCode && activeAssignmentCode !== assignment.assignmentCode) {
-      alert('⚠️ Chỉ có thể sync bài tập hiện tại đang mở!\n\nVui lòng click vào bài tập để chuyển workspace trước.');
-      return;
-    }
-
-    vscode.postMessage({
-      type: 'syncAssignmentWorkspace',
-      assignmentCode: assignment.assignmentCode
-    });
-  };
-
-  const handleSetupWorkspace = (assignment: Assignment, event: React.MouseEvent) => {
-    event.stopPropagation();
-    // Send message to provider which will show VS Code confirmation dialog
-    vscode.postMessage({
-      type: 'setupAssignmentWorkspace',
-      assignmentCode: assignment.assignmentCode,
-      title: assignment.title
-    });
-  };
-
   const handleDeleteAssignment = (assignment: Assignment) => {
     // Send message to provider which will show VS Code confirmation dialog
     vscode.postMessage({
@@ -204,7 +158,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
     return new Date(lastCommitAt).toLocaleString('vi-VN');
   };
 
-  // Show detail view for both teacher and student
   if (selectedAssignment) {
     return (
       <AssignmentDetail
@@ -215,7 +168,10 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
           className: className,
           classCode: classCode
         }}
-        onBack={() => setSelectedAssignment(null)}
+        onBack={() => {
+          onViewChange?.(false);
+          setSelectedAssignment(null);
+        }}
         isTeacher={isTeacher}
         user={user}
       />
@@ -223,44 +179,47 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
   }
 
   if (loading) {
-    return <div className="text-center p-10 text-[#616f89]">Đang tải bài tập...</div>;
+    return <div className="text-center p-10 text-vscode-desc">Đang tải bài tập...</div>;
   }
 
   if (assignments.length === 0) {
     return (
-      <div className="text-center py-12 px-5">
-        <p className="text-[#616f89] mb-2">Chưa có bài tập nào</p>
-        {isTeacher && <p className="text-xs text-[#616f89]">Nhấn "Tạo bài tập" để thêm bài tập mới</p>}
+      <div className="text-center py-12 px-5 border border-dashed border-[var(--vscode-panel-border)] rounded-md mx-5 mt-4">
+        <p className="text-vscode-desc mb-2 text-sm">Chưa có bài tập nào</p>
+        {isTeacher && <p className="text-xs text-vscode-desc">Nhấn "Tạo bài tập" để thêm bài tập mới</p>}
       </div>
     );
   }
 
   return (
-    <section className="py-4">
+    <section className="py-4 font-vscode">
       <div className="px-5 flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold tracking-tight text-[#111318]">
+        <h2 className="text-lg font-bold tracking-tight text-vscode-fg">
           Danh sách bài tập ({assignments.length})
         </h2>
       </div>
 
       {/* Assignment Cards List */}
-      <div className="px-5 space-y-4">
+      <div className="px-5 space-y-3">
         {assignments.map((assignment) => {
           const isCurrentAssignment = assignment.assignmentCode === activeAssignmentCode;
 
           return (
             <div
               key={assignment.assignmentId}
-              className={`group relative rounded-2xl p-4 bg-white transition-all cursor-pointer ${isCurrentAssignment
-                ? 'bg-[#edf3ff] shadow-[0_10px_26px_rgba(19,91,236,0.18)]'
-                : 'shadow-[0_8px_24px_rgba(17,19,24,0.10)] hover:shadow-[0_12px_30px_rgba(17,19,24,0.14)]'
+              // Card Style: Phẳng, viền mỏng. Nếu là bài tập đang Active thì sáng viền và nền lên
+              className={`group relative rounded-md p-4 border border-solid transition-all cursor-pointer ${isCurrentAssignment
+                ? 'border-[var(--vscode-focusBorder)] bg-vscode-hoverBg'
+                : 'border-[var(--vscode-panel-border)] bg-vscode-bg hover:![border-color:var(--vscode-focusBorder)] hover:bg-vscode-hoverBg'
                 }`}
               onClick={() => {
                 if (isTeacher) {
                   // Teacher: Navigate to detail view
+                  onViewChange?.(true);
                   setSelectedAssignment(assignment);
                 } else if (assignment.joined) {
                   // Student: Navigate to detail view if joined
+                  onViewChange?.(true);
                   setSelectedAssignment(assignment);
                 } else {
                   // Student: Join assignment if not joined
@@ -275,7 +234,9 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
                     e.stopPropagation();
                     handleDeleteAssignment(assignment);
                   }}
-                  className="absolute top-4 right-4 text-[#dbdfe6] hover:text-red-500 transition-colors"
+                  // Ẩn nút xóa, chỉ hiện khi Hover chuột vào Card + dùng màu Error của VS Code
+                  className="absolute top-4 right-4 text-vscode-desc opacity-0 group-hover:opacity-100 hover:!text-[var(--vscode-errorForeground)] transition-all p-1 rounded-md hover:bg-vscode-bg"
+                  title="Xóa bài tập"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -285,16 +246,16 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
 
               <div className="flex flex-col gap-2">
                 {/* Title only */}
-                <div className="pr-6">
-                  <h3 className="text-lg font-bold leading-tight text-[#111318] group-hover:underline mb-1">
+                <div className="pr-8">
+                  <h3 className="text-base font-bold leading-tight text-vscode-fg group-hover:underline mb-1">
                     {assignment.title}
                   </h3>
                 </div>
 
                 {/* Info Section */}
-                <div className="flex flex-col gap-1.5 mt-2">
+                <div className="flex flex-col gap-1.5 mt-1">
                   {/* Deadline */}
-                  <div className="flex items-center gap-1.5 text-[#616f89]">
+                  <div className="flex items-center gap-1.5 text-vscode-desc">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
@@ -306,7 +267,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
                   {/* Student Info */}
                   {!isTeacher && assignment.joined && (
                     <>
-                      <div className="flex items-center gap-1.5 text-[#616f89]">
+                      <div className="flex items-center gap-1.5 text-vscode-desc">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
@@ -315,7 +276,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
                         </p>
                       </div>
                       {assignment.lastCommitAt && (
-                        <div className="flex items-center gap-1.5 text-[#616f89]">
+                        <div className="flex items-center gap-1.5 text-vscode-desc">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>

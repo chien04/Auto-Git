@@ -65,69 +65,6 @@ export async function tryOpenPendingNotificationFile(context: vscode.ExtensionCo
     }
 }
 
-export function setupAutoPush(
-    context: vscode.ExtensionContext,
-    deps: RuntimeLifecycleDeps
-): void {
-    const saveListener = vscode.workspace.onDidSaveTextDocument(async (document) => {
-        try {
-            const classInfo = context.globalState.get<any>('current_class');
-            const autoPushEnabled = deps.gitService.isAutoPushEnabled();
-            const workspacePath = deps.gitService.getWorkspacePath();
-
-            console.log('=== Save event triggered ===');
-            console.log('Class info:', classInfo);
-            console.log('Auto-push enabled:', autoPushEnabled);
-            console.log('Workspace path:', workspacePath);
-            console.log('File path:', document.uri.fsPath);
-
-            if (classInfo && (classInfo.role === 'student' || classInfo.role === 'teacher') && autoPushEnabled) {
-                if (workspacePath && document.uri.fsPath.startsWith(workspacePath)) {
-                    console.log(`Auto-pushing changes for: ${document.fileName}`);
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    try {
-                        const pushed = await deps.classroomViewProvider.handleAutoPush(classInfo);
-
-                        if (pushed) {
-                            vscode.window.showInformationMessage('Đã push code lên GitHub!');
-                            vscode.window.setStatusBarMessage('$(cloud-upload) Auto-pushed to GitHub', 3000);
-                        } else {
-                            console.log('Save detected but no effective changes to push');
-                        }
-                    } catch (pushError: any) {
-                        if (pushError.message && pushError.message.includes('Deadline')) {
-                            vscode.window.showErrorMessage('Đã quá hạn nộp bài!');
-                        } else {
-                            vscode.window.showErrorMessage(`Lỗi push code: ${pushError.message}`);
-                        }
-                        return;
-                    }
-                } else {
-                    console.log('File not in workspace. Workspace:', workspacePath, 'File:', document.uri.fsPath);
-                    vscode.window.showWarningMessage(`File không trong workspace. WS: ${workspacePath}`);
-                }
-            } else {
-                const reason = !classInfo
-                    ? 'No class info'
-                    : (classInfo.role !== 'student' && classInfo.role !== 'teacher')
-                        ? 'Not a student or teacher'
-                        : !autoPushEnabled
-                            ? 'Auto-push disabled'
-                            : 'Unknown';
-                console.log('Auto-push skipped. Reason:', reason);
-            }
-        } catch (error: any) {
-            console.error('Auto-push error:', error);
-            if (!error.message || !error.message.includes('Deadline')) {
-                vscode.window.showErrorMessage(`Auto-push failed: ${error.message}`);
-            }
-        }
-    });
-
-    context.subscriptions.push(saveListener);
-}
-
 export async function restoreGitServiceState(
     context: vscode.ExtensionContext,
     deps: RuntimeLifecycleDeps

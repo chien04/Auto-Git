@@ -18,8 +18,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
         setMessage('Tham gia lớp học thành công! Bạn có thể tham gia bài tập.');
         setStudentName('');
         setClassCode('');
-        // Notify parent dashboard
-        vscode.postMessage({ type: 'classJoined' });
+        vscode.postMessage({ type: 'loadMyClasses' });
+        if (onClose) {
+          onClose();
+        } else {
+          vscode.postMessage({ type: 'classJoined' });
+        }
       } else if (msg.command === 'joinClassError') {
         setMessage(`Lỗi: ${msg.error}`);
       }
@@ -49,7 +53,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
           </div>
           <h2 className="text-lg font-bold leading-tight tracking-tight">AutoGit</h2>
         </div>
-        <button 
+        <button
           onClick={onClose}
           className="flex items-center justify-center rounded-lg h-9 w-9 bg-[#f7f7f7] text-[#616f89] hover:bg-[#e5e5e5] transition-colors"
           title="Đóng"
@@ -79,7 +83,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
           <div className="flex flex-col w-full">
             <label className="flex flex-col w-full">
               <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Tên sinh viên</span>
-              <input 
+              <input
                 type="text"
                 className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
                 placeholder="Ví dụ: Nguyễn Văn A"
@@ -93,7 +97,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
           <div className="flex flex-col w-full">
             <label className="flex flex-col w-full">
               <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Mã lớp học</span>
-              <input 
+              <input
                 type="text"
                 className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
                 placeholder="Ví dụ: AB12-CD34"
@@ -116,14 +120,14 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
 
         {/* Action Buttons Section */}
         <div className="mt-10 flex flex-col gap-4">
-          <button 
+          <button
             onClick={handleJoinClass}
             className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 bg-[#135bec] text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity"
           >
             <span>Tham gia lớp học</span>
           </button>
           {onClose && (
-            <button 
+            <button
               onClick={onClose}
               className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#616f89] gap-2 text-sm font-medium leading-normal hover:text-[#111318] transition-colors"
             >
