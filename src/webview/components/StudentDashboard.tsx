@@ -203,7 +203,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>
@@ -411,7 +411,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             {/* Footer */}
             <footer className="p-4 border-t border-solid border-[var(--vscode-panel-border)] flex justify-center bg-transparent">
               <span className="text-[10px] text-vscode-desc font-medium uppercase tracking-widest">
-                AutoGit VS Code Extension v1.0
+                CodingRooms VS Code Extension v1.0
               </span>
             </footer>
           </>
@@ -432,7 +432,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>

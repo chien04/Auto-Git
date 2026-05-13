@@ -46,7 +46,6 @@ export async function handleRunCode(
             };
 
             progress.report({ increment: 40, message: "Đang gọi máy chủ Judge0..." });
-            // GỌI API RUN CODE
             const response = await apiService.runCode(payload);
 
             progress.report({ increment: 30, message: "Đang xử lý kết quả..." });
@@ -134,7 +133,7 @@ export async function handleSubmitCode(
                         `Tuyệt vời! Bạn đạt ${score}/100 điểm (${passedTestCases}/${totalTestCases} Test cases).`
                     );
                 } else {
-                    vscode.window.showWarningMessage(
+                    vscode.window.showInformationMessage(
                         `Hoàn thành: ${score}/100 điểm (${passedTestCases}/${totalTestCases} Test cases). Trạng thái: ${status}`
                     );
                 }

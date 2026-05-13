@@ -219,12 +219,12 @@ export async function handleRemoveStudent(
     try {
         await apiService.removeStudent(classCode, studentId);
 
-        vscode.window.showInformationMessage(`✅ Đã xóa sinh viên ${studentName}`);
+        vscode.window.showInformationMessage(`Đã xóa sinh viên ${studentName}`);
 
         postMessage({
             type: 'studentRemoved'
         });
     } catch (error: any) {
-        vscode.window.showErrorMessage(`❌ Lỗi xóa sinh viên: ${error.message}`);
+        vscode.window.showErrorMessage(`Lỗi xóa sinh viên: ${error.message}`);
     }
 }

@@ -31,6 +31,48 @@ interface ChatWindowProps {
   fullScreen?: boolean;
 }
 
+const CodeBlock = React.memo(({ className, rawCode }: { className: string; rawCode: string }) => {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const languageMatch = /language-([\w-]+)/.exec(className);
+  const languageLabel = languageMatch ? languageMatch[1] : 'Plaintext';
+
+  const handleCopy = useCallback(async () => {
+    if (!rawCode) return;
+    try {
+      await navigator.clipboard.writeText(rawCode);
+      setCopied(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 1400);
+    } catch (e) {
+      console.error('[CodeBlock] copy failed', e);
+    }
+  }, [rawCode]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return (
+    <div className="mb-2 overflow-hidden rounded-2xl border border-[var(--vscode-panel-border)] bg-vscode-iconBg">
+      <div className="flex items-center justify-between border-b border-[var(--vscode-panel-border)] px-3 py-1.5">
+        <span className="text-[13px] font-medium text-vscode-desc">{languageLabel}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex h-5 w-5 items-center justify-center rounded-md text-vscode-desc transition hover:bg-vscode-hoverBg hover:text-vscode-fg"
+          title={copied ? 'Copied' : 'Copy code'}
+          aria-label="Copy code"
+        >
+          {copied ? <Check size={14} strokeWidth={2.2} /> : <Copy size={14} strokeWidth={2.2} />}
+        </button>
+      </div>
+      <pre className="overflow-x-hidden whitespace-pre-wrap break-words px-3 py-2 text-[14px] leading-6 text-vscode-fg">
+        <code className={`${className} bg-transparent`}>{rawCode}</code>
+      </pre>
+    </div>
+  );
+});
+CodeBlock.displayName = 'CodeBlock';
+
 const ChatWindow: React.FC<ChatWindowProps> = ({
   vscode,
   apiService,
@@ -59,10 +101,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const aiStreamingMessageIdRef = useRef<number | null>(null);
   const aiDoneTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const copyCodeResetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
-  const [copiedCodeBlockId, setCopiedCodeBlockId] = useState<string | null>(null);
-  // Track whether initial load scroll has happened
+  const scrollRafRef = useRef<number | null>(null);
   const initialScrollDoneRef = useRef(false);
 
   const ATTACHMENT_PREFIX = '__ATTACHMENT__:';
@@ -70,27 +110,25 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const hasValidOtherUserId = Number.isFinite(normalizedOtherUserId);
   const isAiAssistantChat = chatType === MessageType.PRIVATE && hasValidOtherUserId && normalizedOtherUserId === AI_ASSISTANT_ID;
 
-  const handleCopyCodeBlock = async (codeText: string, blockId: string) => {
-    if (!codeText) return;
-    try {
-      await navigator.clipboard.writeText(codeText);
-      setCopiedCodeBlockId(blockId);
-      if (copyCodeResetTimerRef.current) clearTimeout(copyCodeResetTimerRef.current);
-      copyCodeResetTimerRef.current = setTimeout(() => setCopiedCodeBlockId(null), 1400);
-    } catch (error) {
-      console.error('[ChatWindow] Failed to copy code block:', error);
-    }
-  };
+  const scrollToBottomInstant = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+    });
+  }, []);
 
-  // --- scroll helpers ---
-  // Instant jump — used on initial load so messages start at the bottom
-  const scrollToBottomInstant = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
-  };
-  // Smooth — used for new incoming/outgoing messages
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, []);
+
+  const scrollToBottomThrottled = useCallback(() => {
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollRafRef.current = null;
+    });
+  }, []);
 
   const aiMarkdownComponents = useMemo(() => ({
     h1: ({ children }: { children?: React.ReactNode }) => (
@@ -117,39 +155,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       const childElement = React.isValidElement(firstChild)
         ? firstChild as React.ReactElement<{ className?: string; children?: React.ReactNode }>
         : null;
-
       const className = childElement?.props?.className || '';
       const rawCode = String(childElement?.props?.children ?? '').replace(/\n$/, '');
-      const languageMatch = /language-([\w-]+)/.exec(className);
-      const languageLabel = languageMatch ? languageMatch[1] : 'Plaintext';
-      const codeBlockId = `${languageLabel}:${rawCode.slice(0, 64)}`;
-
-      return (
-        <div className="mb-2 overflow-hidden rounded-2xl border border-[var(--vscode-panel-border)] bg-vscode-iconBg">
-          <div className="flex items-center justify-between border-b border-[var(--vscode-panel-border)] px-3 py-1.5">
-            <span className="text-[13px] font-medium text-vscode-desc">{languageLabel}</span>
-            <button
-              type="button"
-              onClick={() => handleCopyCodeBlock(rawCode, codeBlockId)}
-              className="inline-flex h-5 w-5 items-center justify-center rounded-md text-vscode-desc transition hover:bg-vscode-hoverBg hover:text-vscode-fg"
-              title={copiedCodeBlockId === codeBlockId ? 'Copied' : 'Copy code'}
-              aria-label="Copy code"
-            >
-              {copiedCodeBlockId === codeBlockId ? <Check size={14} strokeWidth={2.2} /> : <Copy size={14} strokeWidth={2.2} />}
-            </button>
-          </div>
-          <pre className="overflow-x-hidden whitespace-pre-wrap break-words px-3 py-2 text-[14px] leading-6 text-vscode-fg">
-            <code className={`${className} bg-transparent`}>{rawCode}</code>
-          </pre>
-        </div>
-      );
+      return <CodeBlock className={className} rawCode={rawCode} />;
     },
     code: ({ children }: { children?: React.ReactNode }) => (
       <code className="break-words rounded-md bg-vscode-iconBg px-1.5 py-0.5 font-mono text-[0.92em] text-vscode-fg">
         {children}
       </code>
     )
-  }), [copiedCodeBlockId]);
+  }), []);
 
   const encodeAttachment = (payload: AttachmentPayload): string =>
     `${ATTACHMENT_PREFIX}${JSON.stringify(payload)}`;
@@ -184,14 +199,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     connectionCheckInterval.current = setInterval(checkConnection, 1000);
     return () => {
       if (connectionCheckInterval.current) clearInterval(connectionCheckInterval.current);
-      if (copyCodeResetTimerRef.current) clearTimeout(copyCodeResetTimerRef.current);
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
       if (aiDoneTimerRef.current) clearTimeout(aiDoneTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
-    // Reset scroll flag whenever the chat target changes
     initialScrollDoneRef.current = false;
 
     const handleMessage = (event: MessageEvent) => {
@@ -214,6 +228,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         const filePath = typeof msg.filePath === 'string' ? msg.filePath : '';
         if (filePath) addContextFile(filePath);
       } else if (isAiAssistantChat && msg && msg.type === 'aiAskFailed') {
+        aiStreamingMessageIdRef.current = null;
         const errorText = typeof msg.error === 'string' && msg.error.trim() ? msg.error : 'AI khong phan hoi!';
         const errorMessage: ChatMessage = {
           id: Date.now() + 1,
@@ -240,17 +255,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     };
   }, [otherUserId, classroomId, isAiAssistantChat, normalizedOtherUserId]);
 
-  // Instant scroll on initial load; smooth scroll for subsequent messages
   useEffect(() => {
     if (loading) return;
     if (!initialScrollDoneRef.current) {
-      // First render after load — jump instantly to bottom
       scrollToBottomInstant();
       initialScrollDoneRef.current = true;
-    } else {
+      return;
+    }
+    const lastMsg = messages[messages.length - 1];
+    const isStreaming =
+      lastMsg?.senderId === AI_ASSISTANT_ID &&
+      lastMsg?.id === aiStreamingMessageIdRef.current;
+    if (!isStreaming) {
       scrollToBottom();
     }
-  }, [messages, loading]);
+  }, [messages, loading, scrollToBottom, scrollToBottomInstant]);
 
   useEffect(() => {
     if (!wsService.isConnected()) return;
@@ -281,7 +300,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }
             return [...prev, message];
           });
-          setTimeout(() => scrollToBottom(), 50);
+          setTimeout(() => scrollToBottom(), 80);
           if (isFromOther && !message.isRead) setTimeout(() => markAsRead(message.id), 100);
         }
       } else if (chatType === MessageType.CLASS_GROUP && classroomId) {
@@ -303,12 +322,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             }
             return [...prev, message];
           });
-          setTimeout(() => scrollToBottom(), 50);
+          setTimeout(() => scrollToBottom(), 80);
         }
       }
     });
     return () => removeListener();
-  }, [currentUserId, otherUserId, classroomId, chatType, isConnected, hasValidOtherUserId, normalizedOtherUserId]);
+  }, [currentUserId, otherUserId, classroomId, chatType, isConnected, hasValidOtherUserId, normalizedOtherUserId, scrollToBottom]);
 
   useEffect(() => {
     if (chatType !== MessageType.CLASS_GROUP || !classroomId || !wsService.isConnected()) return;
@@ -380,10 +399,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       setPendingAttachment(null);
       if (textareaRef.current) textareaRef.current.style.height = '32px';
       if (!isAiAssistantChat) setTimeout(() => window.parent.postMessage({ type: 'newMessage' }, '*'), 500);
-      scrollToBottom();
+      setTimeout(() => scrollToBottom(), 80);
     } catch (error) {
       console.error('Error sending message:', error);
       if (isAiAssistantChat) {
+        aiStreamingMessageIdRef.current = null;
         setMessages((prev) => [...prev, {
           id: Date.now() + 1,
           senderId: AI_ASSISTANT_ID,
@@ -413,26 +433,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         }, 700);
         return;
       }
+
       setMessages((prev) => {
         const streamingId = aiStreamingMessageIdRef.current;
-        if (!streamingId) {
-          const newId = Date.now() + 1;
-          aiStreamingMessageIdRef.current = newId;
-          return [...prev, { id: newId, senderId: AI_ASSISTANT_ID, senderName: otherUserName || 'AI Assistant', receiverId: currentUserId, content: chunk, type: MessageType.PRIVATE, isRead: true, sentAt: new Date().toISOString() }];
-        }
-        const targetMessage = prev.find((msg) => msg.id === streamingId);
-        if (!targetMessage) {
-          return [...prev, { id: streamingId, senderId: AI_ASSISTANT_ID, senderName: otherUserName || 'AI Assistant', receiverId: currentUserId, content: chunk, type: MessageType.PRIVATE, isRead: true, sentAt: new Date().toISOString() }];
-        }
-        return prev.map((msg) => msg.id !== streamingId ? msg : { ...msg, content: (msg.content || '') + chunk, sentAt: new Date().toISOString() });
+        if (!streamingId) return prev;
+        const idx = prev.findIndex((msg) => msg.id === streamingId);
+        if (idx === -1) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
+        return updated;
       });
-      setTimeout(() => scrollToBottom(), 0);
+
+      scrollToBottomThrottled();
     });
     return () => {
       if (aiDoneTimerRef.current) { clearTimeout(aiDoneTimerRef.current); aiDoneTimerRef.current = null; }
       if (unsubscribe) unsubscribe();
     };
-  }, [isAiAssistantChat, currentUserId, otherUserName, isConnected]);
+  }, [isAiAssistantChat, currentUserId, otherUserName, isConnected, scrollToBottomThrottled]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
@@ -470,21 +488,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const renderMessageContent = useCallback((message: ChatMessage) => {
-    const attachment = decodeAttachment(message.content);
+    const contentText = message.content || '';
+    const attachment = decodeAttachment(contentText);
     if (!attachment) {
       const isAiMessage = isAiAssistantChat && message.senderId === AI_ASSISTANT_ID;
       if (isAiMessage) {
         return (
           <div className="text-[15px] leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={aiMarkdownComponents}>
-              {message.content}
+              {contentText}
             </ReactMarkdown>
           </div>
         );
       }
       return (
         <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-          {message.content}
+          {contentText}
           {message.senderId === currentUserId && (
             <span className="ml-1 inline-flex items-center text-vscode-link">
               {message.isRead ? <CheckCheck size={12} strokeWidth={2.2} /> : <Check size={12} strokeWidth={2.2} />}
@@ -594,10 +613,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 </div>
               )}
               <div
-                className={`rounded-sm px-3 py-2 text-[15px] leading-relaxed shadow-sm ${isOwnMessage
-                    ? 'bg-vscode-activeBg text-vscode-activeFg shadow-[0_6px_16px_rgba(0,0,0,0.2)]'
-                    : 'bg-vscode-iconBg text-vscode-fg shadow-[0_6px_16px_rgba(0,0,0,0.15)]'
-                  } max-w-full overflow-hidden`}
+                className={`rounded-xl px-3 py-2 text-[15px] leading-relaxed shadow-sm max-w-full overflow-hidden ${isOwnMessage
+                  ? 'bg-[#2d2d2d] text-[#e6e6e6] shadow-[0_4px_12px_rgba(0,0,0,0.35)] border border-[rgba(255,255,255,0.06)]'
+                  // AI bubble stays default (transparent / vscode-iconBg feel)
+                  : 'bg-vscode-iconBg text-vscode-fg shadow-[0_2px_8px_rgba(0,0,0,0.15)]'
+                  }`}
                 title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
               >
                 {renderMessageContent(message)}
@@ -654,8 +674,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                   <span
                     key={`${filePath}-${index}`}
                     className={`inline-flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-[11px] border border-solid border-[var(--vscode-panel-border)] ${index === 0 && filePath === activeFilePath
-                        ? 'bg-vscode-activeBg text-vscode-activeFg'
-                        : 'bg-vscode-iconBg text-vscode-desc'
+                      ? 'bg-vscode-activeBg text-vscode-activeFg'
+                      : 'bg-vscode-iconBg text-vscode-desc'
                       }`}
                     title={filePath}
                   >
@@ -746,8 +766,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
             onClick={handleSendMessage}
             disabled={!isConnected}
             className={`flex h-9 w-9 items-center justify-center rounded-sm p-0 transition-all duration-150 ${isConnected
-                ? 'cursor-pointer text-vscode-link hover:bg-vscode-hoverBg'
-                : 'cursor-not-allowed text-vscode-desc opacity-40'
+              ? 'cursor-pointer text-vscode-link hover:bg-vscode-hoverBg'
+              : 'cursor-not-allowed text-vscode-desc opacity-40'
               }`}
             title={(newMessage.trim() || pendingAttachment) ? 'Gửi' : 'Thả tim'}
           >

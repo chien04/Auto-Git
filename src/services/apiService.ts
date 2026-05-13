@@ -270,13 +270,47 @@ export class ApiService {
 
     async uploadTaskTestCasesZip(assignmentCode: string, tasks: UploadTaskZipPayload[]): Promise<any> {
         try {
-            const response = await this.api.post('/test-cases/upload-task-zips', {
-                assignmentCode,
-                tasks
+            const formData = new FormData();
+            formData.append('assignmentCode', assignmentCode);
+
+            tasks.forEach((task, index) => {
+                if (!task?.fileContent) {
+                    return;
+                }
+
+                const taskName = task.taskName && task.taskName.trim()
+                    ? task.taskName.trim()
+                    : `Task ${index + 1}`;
+                const fileName = task.fileName && task.fileName.trim()
+                    ? task.fileName.trim()
+                    : `task-${index + 1}.zip`;
+
+                const buffer = Buffer.from(task.fileContent, 'base64');
+                const fileBlob = new Blob([buffer], { type: 'application/zip' });
+
+                formData.append('taskNames', taskName);
+                formData.append('files', fileBlob, fileName);
             });
-            return response.data;
+
+            const headers: Record<string, string> = {};
+            if (this.jwtToken) {
+                headers.Authorization = `Bearer ${this.jwtToken}`;
+            }
+
+            const response = await fetch(`${this.baseURL}/test-cases/upload-task-zips`, {
+                method: 'POST',
+                body: formData,
+                headers
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}`);
+            }
+
+            return await response.json();
         } catch (error: any) {
-            throw new Error(`Failed to upload task test cases ZIP: ${error.response?.data?.message || error.message}`);
+            throw new Error(`Failed to upload task test cases ZIP: ${error?.message || String(error)}`);
         }
     }
 
@@ -543,7 +577,6 @@ export class ApiService {
 
     public async runCode(payload: any): Promise<any> {
         try {
-            // Đổi URL cho khớp với @RequestMapping của Controller
             const response = await this.api.post('/judge/run', payload);
             return response.data;
         } catch (error) {

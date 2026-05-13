@@ -284,7 +284,7 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
                     : 'bg-transparent text-vscode-desc border-[var(--vscode-panel-border)] hover:bg-vscode-hoverBg hover:text-vscode-fg'
                     }`}
                 >
-                  {`Task ${task.orderNo}`}
+                  {`Câu ${task.orderNo}`}
                 </button>
               ))}
             </div>

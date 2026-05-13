@@ -18,13 +18,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
               <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-vscode-fg">AutoGit</h2>
+          <h2 className="text-xl font-bold tracking-tight text-vscode-fg">CodingRooms</h2>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-vscode-fg">
-          Welcome to AutoGit
+          Chào mừng đến với CodingRooms
         </h1>
         <p className="text-sm font-medium text-vscode-desc">
-          Select your role to get started
+          Bắt đầu bằng cách chọn vai trò của bạn
         </p>
       </header>
 
@@ -44,7 +44,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
           <div className="flex flex-col gap-1 flex-1">
             <h3 className="text-base font-bold text-vscode-fg">Student</h3>
             <p className="text-sm leading-normal text-vscode-desc">
-              Join classrooms and solve coding challenges
+              Tham gia lớp học và chinh phục các thử thách lập trình
             </p>
           </div>
           {/* Chevron mũi tên */}
@@ -66,7 +66,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
           <div className="flex flex-col gap-1 flex-1">
             <h3 className="text-base font-bold text-vscode-fg">Teacher</h3>
             <p className="text-sm leading-normal text-vscode-desc">
-              Manage students and interactive curriculum
+              Quản lý học viên và xây dựng lộ trình học tập tương tác
             </p>
           </div>
           {/* Chevron mũi tên */}
@@ -79,13 +79,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
       {/* Footer */}
       <footer className="mt-auto pt-8 w-full">
         <p className="text-center text-xs leading-relaxed text-vscode-desc">
-          By continuing, you agree to our{' '}
-          <a className="font-medium cursor-pointer text-vscode-link hover:underline">Terms of Service</a>
+          Bằng việc tiếp tục, bạn đồng ý với{' '}
+          <a className="font-medium cursor-pointer text-vscode-link hover:underline">Điều khoản dịch vụ</a>
           {' '}and{' '}
-          <a className="font-medium cursor-pointer text-vscode-link hover:underline">Privacy Policy</a>
+          <a className="font-medium cursor-pointer text-vscode-link hover:underline">Chính sách bảo mật</a>
         </p>
         <div className="mt-4 text-center text-[10px] text-vscode-desc">
-          © 2026 AutoGit Inc.
+          © 2026 CodingRooms.
         </div>
       </footer>
 

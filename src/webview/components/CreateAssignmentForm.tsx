@@ -326,7 +326,7 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
                 <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
               </svg>
             </div>
-            <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+            <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
@@ -370,7 +370,7 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
                     : 'bg-[var(--vscode-input-background)] text-vscode-desc hover:bg-vscode-hoverBg'
                     }`}
                 >
-                  {task.taskName}
+                  Câu {task.id}
                 </button>
                 <button
                   type="button"

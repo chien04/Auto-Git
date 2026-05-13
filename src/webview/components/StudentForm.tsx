@@ -42,106 +42,111 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
   };
 
   return (
-    <>
-      {/* Header */}
-      <header className="flex items-center justify-between whitespace-nowrap border-b border-[#dbdfe6] px-6 py-4 bg-white">
-        <div className="flex items-center gap-3 text-[#111318]">
-          <div className="w-6 h-6 text-[#111318] flex items-center justify-center">
-            <svg className="w-full h-full" fill="currentColor" viewBox="0 0 48 48">
-              <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold leading-tight tracking-tight">AutoGit</h2>
-        </div>
-        <button
-          onClick={onClose}
-          className="flex items-center justify-center rounded-lg h-9 w-9 bg-[#f7f7f7] text-[#616f89] hover:bg-[#e5e5e5] transition-colors"
-          title="Đóng"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </header>
+    <div className="font-vscode bg-vscode-bg text-vscode-fg min-h-screen flex justify-center">
+      <div className="flex flex-col min-h-screen max-w-[500px] w-full">
 
-      {/* Form Content Container */}
-      <main className="flex flex-col flex-1 px-6 py-10 bg-white h-full">
-        {/* Headline Section */}
-        <div className="flex flex-col items-center mb-8">
-          <h1 className="text-[#111318] tracking-tight text-[28px] font-extrabold leading-tight text-center">
-            Tham gia lớp học
-          </h1>
-          {/* Body Text */}
-          <p className="text-[#616f89] text-base font-normal leading-relaxed text-center mt-3">
-            Nhập tên và mã lớp học do giáo viên cung cấp
-          </p>
-        </div>
-
-        {/* Input Fields Section */}
-        <div className="space-y-5">
-          {/* Student Name Field */}
-          <div className="flex flex-col w-full">
-            <label className="flex flex-col w-full">
-              <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Tên sinh viên</span>
-              <input
-                type="text"
-                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
-                placeholder="Ví dụ: Nguyễn Văn A"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-              />
-            </label>
-          </div>
-
-          {/* Class Code Field */}
-          <div className="flex flex-col w-full">
-            <label className="flex flex-col w-full">
-              <span className="text-[#111318] text-sm font-semibold leading-normal pb-2 ml-1">Mã lớp học</span>
-              <input
-                type="text"
-                className="form-input flex w-full rounded-lg text-[#111318] focus:outline-0 focus:ring-2 focus:ring-[#135bec]/20 border border-[#dbdfe6] bg-white h-14 placeholder:text-[#9ca3af] p-4 text-base font-normal leading-normal transition-all"
-                placeholder="Ví dụ: AB12-CD34"
-                value={classCode}
-                onChange={(e) => setClassCode(e.target.value.toUpperCase())}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') handleJoinClass();
-                }}
-              />
-            </label>
-          </div>
-
-          {/* Message Display */}
-          {message && (
-            <div className="p-4 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20">
-              <p className="text-sm text-[#111318] text-center font-medium">{message}</p>
+        {/* Header — identical to TeacherForm */}
+        <header className="flex items-center justify-between px-5 py-3 border-b border-solid border-[var(--vscode-panel-border)]">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 text-vscode-link flex items-center justify-center">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
+                <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
+              </svg>
             </div>
-          )}
-        </div>
-
-        {/* Action Buttons Section */}
-        <div className="mt-10 flex flex-col gap-4">
-          <button
-            onClick={handleJoinClass}
-            className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 bg-[#135bec] text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity"
-          >
-            <span>Tham gia lớp học</span>
-          </button>
-          {onClose && (
+            <h1 className="text-base font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-medium text-vscode-fg">{user?.name || 'Sinh viên'}</span>
+            <div className="w-px h-3.5 bg-[var(--vscode-panel-border)]"></div>
             <button
-              onClick={onClose}
-              className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#616f89] gap-2 text-sm font-medium leading-normal hover:text-[#111318] transition-colors"
+              onClick={() => vscode.postMessage({ type: 'logout' })}
+              className="cursor-pointer flex items-center justify-center p-1 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
+              title="Đăng xuất"
             >
-              <span>Hủy</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
             </button>
-          )}
-        </div>
+          </div>
+        </header>
 
-        {/* Visual Accent */}
-        <div className="mt-auto pt-10 flex justify-center opacity-10">
-          <div className="w-24 h-1 bg-[#111318] rounded-full"></div>
-        </div>
-      </main>
-    </>
+        {/* Main — same padding/layout as TeacherForm */}
+        <main className="flex flex-1 flex-col px-6 pt-8 pb-10">
+          <div className="w-full flex flex-col gap-6">
+
+            {/* Title block */}
+            <div>
+              <h1 className="text-vscode-fg text-[22px] font-normal leading-tight mb-1.5">
+                Tham gia lớp học
+              </h1>
+              <p className="text-vscode-desc text-[13px] leading-relaxed">
+                Nhập tên và mã lớp học do giáo viên cung cấp để bắt đầu.
+              </p>
+            </div>
+
+            {/* Form inputs */}
+            <div className="flex flex-col gap-4">
+
+              {/* Student name */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-vscode-fg text-[13px] font-medium">Tên sinh viên</label>
+                <input
+                  type="text"
+                  className="flex w-full rounded-sm border border-solid border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none focus:outline focus:outline-1 focus:-outline-offset-1 focus:outline-[var(--vscode-focusBorder)]  focus:border-[var(--vscode-focusBorder)] h-7 px-2.5 text-[13px] transition-all placeholder:text-[var(--vscode-input-placeholderForeground)]"
+                  placeholder="Ví dụ: Nguyễn Văn A"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              {/* Class code */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-vscode-fg text-[13px] font-medium">Mã lớp học</label>
+                <input
+                  type="text"
+                  className="flex w-full rounded-sm border border-solid border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none focus:outline focus:outline-1 focus:-outline-offset-1 focus:outline-[var(--vscode-focusBorder)]  focus:border-[var(--vscode-focusBorder)] h-7 px-2.5 text-[13px] font-mono transition-all placeholder:text-[var(--vscode-input-placeholderForeground)]"
+                  placeholder="Ví dụ: AB12-CD34"
+                  value={classCode}
+                  onChange={(e) => setClassCode(e.target.value.toUpperCase())}
+                  onKeyPress={(e) => { if (e.key === 'Enter') handleJoinClass(); }}
+                />
+              </div>
+
+              {/* Message box — same style as TeacherForm */}
+              {message && (
+                <div className="px-3 py-2 rounded-sm bg-[var(--vscode-textBlockQuote-background)] border border-solid border-[var(--vscode-panel-border)] flex items-start gap-2">
+                  <svg className="w-4 h-4 text-vscode-link shrink-0 mt-[1px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-[12px] text-vscode-fg leading-relaxed font-medium">{message}</p>
+                </div>
+              )}
+
+              {/* Action buttons — identical sizing to TeacherForm */}
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  onClick={handleJoinClass}
+                  className="cursor-pointer flex items-center justify-center rounded-sm h-7 px-4 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-[13px] font-medium hover:bg-[var(--vscode-button-hoverBackground)] transition-colors active:scale-[0.98]"
+                >
+                  Tham gia lớp học
+                </button>
+                {onClose && (
+                  <button
+                    onClick={onClose}
+                    className="cursor-pointer flex items-center justify-center rounded-sm h-7 px-4 border border-solid border-[var(--vscode-button-secondaryBackground)] bg-transparent text-vscode-fg text-[13px] font-medium hover:bg-vscode-hoverBg transition-colors"
+                  >
+                    Hủy
+                  </button>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </main>
+
+      </div>
+    </div>
   );
 };
 

@@ -60,7 +60,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ vscode, role, onBack }) => {
               <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold tracking-tight text-vscode-fg">AutoGit</h2>
+          <h2 className="text-xl font-bold tracking-tight text-vscode-fg">CodingRooms</h2>
         </div>
         <h1 className="text-xl font-bold tracking-tight text-center text-vscode-fg">
           Đăng nhập với tư cách <span className="text-vscode-link">{roleText}</span>

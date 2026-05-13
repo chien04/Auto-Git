@@ -49,66 +49,72 @@ export async function handleCreateAssignment(
             vscode.window.showWarningMessage('Cần chọn thư mục gốc để tiếp tục tạo bài tập.');
             return;
         }
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Đang tạo bài tập',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 20, message: 'Đang tạo bài tập trên hệ thống...' });
 
-        const response = await deps.apiService.createAssignment(classCode, title, description, deadline, tasks);
+            const response = await deps.apiService.createAssignment(classCode, title, description, deadline, tasks);
 
-        if (response.repoUrl && response.token) {
-            vscode.window.showInformationMessage('Đang clone repository bài tập...');
+            progress.report({ increment: 20, message: 'Đang chuẩn bị workspace...' });
 
-            const folderName = `${classCode}-${response.assignmentCode}-teacher`;
-            const relativePath = path.join(classCode, folderName);
-            const clonePath = path.join(baseDirectory, relativePath);
+            if (response.repoUrl && response.token) {
+                progress.report({ increment: 30, message: 'Đang clone repository bài tập...' });
 
-            await deps.gitService.cloneRepository({
-                repoUrl: response.repoUrl,
-                branch: 'teacher',
-                token: response.token,
-                localPath: clonePath
-            });
+                const folderName = `${classCode}-${response.assignmentCode}-teacher`;
+                const relativePath = path.join(classCode, folderName);
+                const clonePath = path.join(baseDirectory, relativePath);
 
-            ensureStudentsIgnored(clonePath);
+                await deps.gitService.cloneRepository({
+                    repoUrl: response.repoUrl,
+                    branch: 'teacher',
+                    token: response.token,
+                    localPath: clonePath
+                });
 
-            await deps.gitService.initializeWorkspace(clonePath, {
-                token: response.token,
-                repoUrl: response.repoUrl,
-                branch: 'teacher'
-            });
-            deps.gitService.enableAutoPush();
+                ensureStudentsIgnored(clonePath);
 
-            upsertRoom(baseDirectory, userData.userId, response.assignmentCode, relativePath, response.repoUrl, 'teacher');
+                progress.report({ increment: 20, message: 'Đang khởi tạo workspace...' });
+                await deps.gitService.initializeWorkspace(clonePath, {
+                    token: response.token,
+                    repoUrl: response.repoUrl,
+                    branch: 'teacher'
+                });
+                deps.gitService.enableAutoPush();
 
-            const assignmentInfo = {
-                assignmentCode: response.assignmentCode,
-                repoUrl: response.repoUrl,
-                token: response.token,
-                role: 'teacher',
-                branch: 'teacher'
-            };
+                upsertRoom(baseDirectory, userData.userId, response.assignmentCode, relativePath, response.repoUrl, 'teacher');
 
-            await deps.context.globalState.update(`assignment_${response.assignmentCode}`, assignmentInfo);
-            await deps.context.globalState.update('current_class', assignmentInfo);
+                const assignmentInfo = {
+                    assignmentCode: response.assignmentCode,
+                    repoUrl: response.repoUrl,
+                    token: response.token,
+                    role: 'teacher',
+                    branch: 'teacher'
+                };
 
-            const { token: _token, ...safeData } = response;
-            deps.postMessage({
-                command: 'createAssignmentSuccess',
-                data: safeData
-            });
-        } else {
-            const { token: _token, ...safeData } = response;
-            deps.postMessage({
-                command: 'createAssignmentSuccess',
-                data: safeData
-            });
-        }
-
-        vscode.window.showInformationMessage(
-            `Bài tập đã được tạo! Assignment Code: ${response.assignmentCode}`,
-            'Copy Assignment Code'
-        ).then(selection => {
-            if (selection === 'Copy Assignment Code') {
-                vscode.env.clipboard.writeText(response.assignmentCode);
-                vscode.window.showInformationMessage('Đã copy assignment code!');
+                await deps.context.globalState.update(`assignment_${response.assignmentCode}`, assignmentInfo);
+                await deps.context.globalState.update('current_class', assignmentInfo);
             }
+
+            const { token: _token, ...safeData } = response;
+            deps.postMessage({
+                command: 'createAssignmentSuccess',
+                data: safeData
+            });
+
+            progress.report({ increment: 10, message: 'Hoàn tất tạo bài tập.' });
+
+            vscode.window.showInformationMessage(
+                `Bài tập đã được tạo! Assignment Code: ${response.assignmentCode}`,
+                'Copy Assignment Code'
+            ).then(selection => {
+                if (selection === 'Copy Assignment Code') {
+                    vscode.env.clipboard.writeText(response.assignmentCode);
+                    vscode.window.showInformationMessage('Đã copy assignment code!');
+                }
+            });
         });
     } catch (error: any) {
         deps.postMessage({
@@ -182,62 +188,70 @@ export async function handleJoinAssignment(
         if (!userData?.userId) {
             throw new Error('Không tìm thấy user hiện tại');
         }
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Đang tham gia bài tập',
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ increment: 20, message: 'Đang xác nhận thông tin bài tập...' });
 
-        const response = await deps.apiService.joinAssignment(assignmentCode, '');
+            const response = await deps.apiService.joinAssignment(assignmentCode, '');
 
-        const folderName = `${assignmentCode}-${response.branch.replace('student/', '')}`;
-        const relativePath = path.join('student', folderName);
-        const clonePath = path.join(localPath, relativePath);
+            const folderName = `${assignmentCode}-${response.branch.replace('student/', '')}`;
+            const relativePath = path.join('student', folderName);
+            const clonePath = path.join(localPath, relativePath);
 
-        console.log('[DEBUG] Calculated clone path:', clonePath);
+            console.log('[DEBUG] Calculated clone path:', clonePath);
 
+            upsertRoom(localPath, userData.userId, assignmentCode, relativePath, response.repoUrl, response.branch);
 
-        upsertRoom(localPath, userData.userId, assignmentCode, relativePath, response.repoUrl, response.branch);
+            const assignmentInfo = {
+                assignmentCode,
+                repoUrl: response.repoUrl,
+                branch: response.branch,
+                token: response.token,
+                role: 'student',
+                deadline: response.deadline
+            };
 
-        const assignmentInfo = {
-            assignmentCode,
-            repoUrl: response.repoUrl,
-            branch: response.branch,
-            token: response.token,
-            role: 'student',
-            deadline: response.deadline
-        };
+            await deps.context.globalState.update(`student_assignment_${assignmentCode}`, assignmentInfo);
+            await deps.context.globalState.update('current_class', assignmentInfo);
 
-        await deps.context.globalState.update(`student_assignment_${assignmentCode}`, assignmentInfo);
-        await deps.context.globalState.update('current_class', assignmentInfo);
+            const { token: _token, ...safeResponse } = response;
+            deps.postMessage({
+                type: 'assignmentJoined',
+                data: safeResponse
+            });
 
-        const { token: _token, ...safeResponse } = response;
-        deps.postMessage({
-            type: 'assignmentJoined',
-            data: safeResponse
+            progress.report({ increment: 40, message: 'Đang clone repository bài tập...' });
+
+            await deps.gitService.cloneRepository({
+                repoUrl: response.repoUrl,
+                branch: response.branch,
+                token: response.token,
+                localPath: clonePath
+            });
+
+            console.log('[DEBUG] Clone completed at:', clonePath);
+
+            progress.report({ increment: 20, message: 'Đang khởi tạo workspace...' });
+            deps.gitService.setClassInfo(deps.apiService, assignmentCode);
+            deps.gitService.enableAutoPush();
+
+            deps.postMessage({
+                type: 'assignmentJoinedSuccess',
+                assignmentCode
+            });
+
+            const uri = vscode.Uri.file(clonePath);
+            await deps.closeAllEditorsBeforeWorkspaceOpen();
+            await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+
+            progress.report({ increment: 20, message: 'Hoàn tất tham gia bài tập.' });
+            vscode.window.showInformationMessage(
+                'Repository bài tập đã được clone! Auto-push đã được kích hoạt.'
+            );
         });
-
-        vscode.window.showInformationMessage('Đang clone repository bài tập...');
-
-        await deps.gitService.cloneRepository({
-            repoUrl: response.repoUrl,
-            branch: response.branch,
-            token: response.token,
-            localPath: clonePath
-        });
-
-        console.log('[DEBUG] Clone completed at:', clonePath);
-
-        deps.gitService.setClassInfo(deps.apiService, assignmentCode);
-        deps.gitService.enableAutoPush();
-
-        deps.postMessage({
-            type: 'assignmentJoinedSuccess',
-            assignmentCode
-        });
-
-        const uri = vscode.Uri.file(clonePath);
-        await deps.closeAllEditorsBeforeWorkspaceOpen();
-        await vscode.commands.executeCommand('vscode.openFolder', uri, false);
-
-        vscode.window.showInformationMessage(
-            'Repository bài tập đã được clone! Auto-push đã được kích hoạt.'
-        );
     } catch (error: any) {
         deps.postMessage({
             type: 'joinAssignmentError',
@@ -273,9 +287,22 @@ export async function handleOpenAssignment(
         console.log('[DEBUG] Opening assignment:', assignmentCode, 'User role:', userRole);
 
         if (userRole === 'TEACHER') {
-            await handleSyncTeacherWorkspaceBestEffort(deps, assignmentCode, userData);
-            await triggerVectorDbUploadInBackground(deps, assignmentCode, userData);
-            await handleOpenTeacherAssignment(deps, assignmentCode);
+            await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: 'Đang đồng bộ & mở bài tập',
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ increment: 20, message: 'Đang đồng bộ bài nộp...' });
+                await handleSyncTeacherWorkspaceBestEffort(deps, assignmentCode, userData);
+
+                progress.report({ increment: 20, message: 'Đang chuẩn bị dữ liệu AI...' });
+                await triggerVectorDbUploadInBackground(deps, assignmentCode, userData);
+
+                progress.report({ increment: 40, message: 'Đang mở workspace...' });
+                await handleOpenTeacherAssignment(deps, assignmentCode);
+
+                progress.report({ increment: 20, message: 'Hoàn tất mở bài tập.' });
+            });
         } else {
             await handleOpenStudentAssignment(deps, assignmentCode);
         }

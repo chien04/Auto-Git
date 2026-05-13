@@ -177,7 +177,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
@@ -230,9 +230,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
                   onClick={() => setShowCreateAssignmentForm(true)}
                   className="cursor-pointer w-full bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] py-2.5 rounded-md font-medium text-sm hover:bg-[var(--vscode-button-hoverBackground)] transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
                   Tạo bài tập mới
                 </button>
               </div>
@@ -426,7 +423,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
                   <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
                 </svg>
               </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>

@@ -55,15 +55,12 @@ import {
     handleExportAssignmentExcel,
     handleGetAssignments,
     handleGetAssignmentSubmissions,
-    handleJoinAssignment,
     handleJoinAssignmentWithPrompt,
     handleOpenAssignment,
     handleOpenAssignmentFolder,
-    handleOpenStudentAssignment,
     handleOpenTeacherAssignment,
     handleSkipTestCases,
     handleSyncAssignmentWorkspace,
-    handleSyncTeacherWorkspaceBestEffort,
     handleUploadTaskTestCasesZip,
     handleViewAssignment,
     viewTaskResult
@@ -301,7 +298,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleResolveCodeComment(message.commentId, message.assignmentCode, message.targetBranch, message.studentFilePath);
                 break;
 
-            // ===================== CHAT HANDLERS =====================
             case 'getChatClassrooms':
                 await this._handleGetChatClassrooms();
                 break;
@@ -342,7 +338,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleAskAiWithContext(message.message, message.contextFiles);
                 break;
 
-            // ===================== NOTIFICATION HANDLERS =====================
             case 'getNotifications':
                 await this._handleGetNotifications();
                 break;
@@ -431,20 +426,12 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleJoinAssignmentWithPrompt(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
-    private async _handleJoinAssignment(assignmentCode: string, localPath: string) {
-        await handleJoinAssignment(this._getAssignmentHandlerDeps(), assignmentCode, localPath);
-    }
-
     private async _handleViewAssignment(assignmentCode: string) {
         await handleViewAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
     private async _handleOpenAssignment(assignmentCode: string) {
         await handleOpenAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
-    private async _handleOpenStudentAssignment(assignmentCode: string) {
-        await handleOpenStudentAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
     private async _handleOpenTeacherAssignment(assignmentCode: string) {
@@ -498,10 +485,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
     private async _handleSyncAssignmentWorkspace(assignmentCode: string) {
         await handleSyncAssignmentWorkspace(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
-    private async _syncTeacherWorkspaceBestEffort(assignmentCode: string, userData: any) {
-        await handleSyncTeacherWorkspaceBestEffort(this._getAssignmentHandlerDeps(), assignmentCode, userData);
     }
 
     private async _handleDeleteAssignment(assignmentCode: string, title?: string) {
@@ -572,8 +555,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
     private async _handleGetCurrentWorkspace() {
         await handleGetCurrentWorkspace(this._context, (message) => this._postMessage(message));
     }
-
-    // ===================== CHAT HANDLERS =====================
 
     private async _handleGetChatClassrooms() {
         await handleGetChatClassrooms(this.apiService, (message) => this._postMessage(message));

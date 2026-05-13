@@ -62,7 +62,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode, user, onClose }) => {
                 <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
               </svg>
             </div>
-            <h1 className="text-base font-bold tracking-tight text-vscode-fg">AutoGit</h1>
+            <h1 className="text-base font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-medium text-vscode-fg">{user?.name || 'Giáo viên'}</span>
@@ -99,7 +99,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({ vscode, user, onClose }) => {
                 <label className="text-vscode-fg text-[13px] font-medium">Tên lớp học</label>
                 <input
                   // Cực kỳ quan trọng: Input cao 28px (h-7), chữ 13px, viền bao trong (outline-offset-[-1px])
-                  className="flex w-full rounded-sm border border-solid border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none focus:outline focus:outline-1 focus:-outline-offset-1 focus:outline-[var(--vscode-focusBorder)] focus:border-transparent h-7 px-2.5 text-[13px] transition-all placeholder:text-[var(--vscode-input-placeholderForeground)]"
+                  className="flex w-full rounded-sm border border-solid border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] outline-none focus:outline focus:outline-1 focus:-outline-offset-1  focus:border-[var(--vscode-focusBorder)] focus:outline-[var(--vscode-focusBorder)] h-7 px-2.5 text-[13px] transition-all placeholder:text-[var(--vscode-input-placeholderForeground)]"
                   placeholder="Ví dụ: Lập trình Web - K66"
                   type="text"
                   value={className}
