@@ -1,4 +1,5 @@
 import React from 'react';
+import uetLogo from '../assets/uet.jpg';
 
 interface WelcomeScreenProps {
   onSelectRole: (role: 'student' | 'teacher') => void;
@@ -13,10 +14,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
       <header className="flex flex-col items-center text-center gap-6 mt-4 mb-8">
         <div className="flex items-center gap-2">
           {/* Logo */}
-          <div className="w-8 h-8 text-vscode-link">
-            <svg fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-              <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-            </svg>
+          <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
+            <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
           </div>
           <h2 className="text-xl font-bold tracking-tight text-vscode-fg">CodingRooms</h2>
         </div>

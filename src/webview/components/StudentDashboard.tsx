@@ -7,6 +7,7 @@ import Settings from './Setting';
 import ChatView from './ChatView';
 import ChatWindow from './ChatWindow';
 import { MessageType } from '../services/websocketService';
+import uetLogo from '../assets/uet.jpg';
 
 interface StudentDashboardProps {
   vscode: any;
@@ -198,10 +199,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
           {/* Header */}
           <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 text-vscode-link flex items-center justify-center rounded-sm">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
-                  <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-                </svg>
+              <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
+                <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
               </div>
               <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
             </div>

@@ -522,6 +522,10 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'webview.js')
         );
 
+        const logoUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'uet.jpg')
+        );
+
         const nonce = this._getNonce();
 
         return `<!DOCTYPE html>
@@ -529,8 +533,11 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline'; connect-src http://localhost:8080 ws://localhost:8080;">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} vscode-webview-resource: https: data: blob:; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline' https:; font-src ${webview.cspSource} https: data: vscode-webview-resource:; connect-src http://localhost:8080 ws://localhost:8080;">
                 <title>Auto Submit</title>
+                <script nonce="${nonce}">
+                    window.__uetLogoUri = "${logoUri}";
+                </script>
             </head>
             <body>
                 <div id="root"></div>

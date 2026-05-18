@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import uetLogo from '../assets/uet.jpg';
 
 interface StudentFormProps {
   vscode: any;
@@ -48,10 +49,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ vscode, user, onClose }) => {
         {/* Header — identical to TeacherForm */}
         <header className="flex items-center justify-between px-5 py-3 border-b border-solid border-[var(--vscode-panel-border)]">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 text-vscode-link flex items-center justify-center">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
-                <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-              </svg>
+            <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
+              <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
             </div>
             <h1 className="text-base font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
           </div>

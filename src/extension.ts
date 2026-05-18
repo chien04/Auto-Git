@@ -368,14 +368,29 @@ export async function activate(context: vscode.ExtensionContext) {
 	const commentDecorationType = vscode.window.createTextEditorDecorationType({
 		after: {
 			margin: '0 0 0 3.2rem',
-			backgroundColor: 'rgba(37, 99, 235, 0.18)',
-			color: '#bfdbfe',
 			fontStyle: 'normal',
 			fontWeight: '700'
+		},
+		light: {
+			after: {
+				backgroundColor: 'rgba(37, 99, 235, 0.15)',
+				color: '#1e40af' // Màu xanh đậm tương phản tốt trên nền sáng
+			}
+		},
+		dark: {
+			after: {
+				backgroundColor: 'rgba(37, 99, 235, 0.25)',
+				color: '#bfdbfe' // Màu xanh nhạt trên nền tối
+			}
 		}
 	});
 	const rangeHighlightDecorationType = vscode.window.createTextEditorDecorationType({
-		backgroundColor: 'rgba(56, 189, 248, 0.24)'
+		light: {
+			backgroundColor: 'rgba(56, 189, 248, 0.3)'
+		},
+		dark: {
+			backgroundColor: 'rgba(56, 189, 248, 0.24)'
+		}
 	});
 
 	checkGitInstalled();
