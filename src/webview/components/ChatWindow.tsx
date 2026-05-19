@@ -10,11 +10,65 @@ const remarkGfm = require('remark-gfm').default;
 const remarkMath = require('remark-math').default;
 const rehypeKatex = require('rehype-katex').default;
 
+/* ── Thinking animation ──────────────────────────────────────── */
+const THINKING_STYLE = `
+@keyframes ai-thinking-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes ai-dot-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40%            { transform: translateY(-5px); opacity: 1; }
+}
+.ai-thinking-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(128,128,128,0.25);
+  border-top-color: var(--vscode-focusBorder, #007acc);
+  border-radius: 50%;
+  animation: ai-thinking-spin 0.75s linear infinite;
+  display: inline-block;
+}
+.ai-dot { animation: ai-dot-bounce 1.2s ease-in-out infinite; }
+.ai-dot:nth-child(2) { animation-delay: 0.2s; }
+.ai-dot:nth-child(3) { animation-delay: 0.4s; }
+`;
+
+const ThinkingIndicator: React.FC = () => (
+  <>
+    <style>{THINKING_STYLE}</style>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+      <span className="ai-thinking-spinner" />
+      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {['', '', ''].map((_, i) => (
+          <span
+            key={i}
+            className="ai-dot"
+            style={{
+              width: 5, height: 5,
+              borderRadius: '50%',
+              background: 'var(--vscode-focusBorder, #007acc)',
+              display: 'inline-block',
+            }}
+          />
+        ))}
+      </span>
+      <span style={{ fontSize: 12, opacity: 0.6 }}>Đang suy nghĩ...</span>
+    </div>
+  </>
+);
+
 type AttachmentPayload = {
   kind: 'image' | 'file';
   name: string;
   mimeType: string;
   dataUrl: string;
+};
+
+type AiStreamEvent = {
+  type: 'chunk' | 'done' | 'error';
+  sequence?: number;
+  content?: string;
 };
 
 interface ChatWindowProps {
@@ -94,6 +148,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const [activeFilePath, setActiveFilePath] = useState('');
   const [contextFiles, setContextFiles] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,23 +156,48 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const connectionCheckInterval = useRef<NodeJS.Timeout | null>(null);
   const aiStreamingMessageIdRef = useRef<number | null>(null);
   const aiDoneTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const aiStreamBufferRef = useRef('');
+  const aiStreamFlushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const aiStreamNextSequenceRef = useRef(0);
+  const aiStreamPendingChunksRef = useRef<Map<number, string>>(new Map());
+  const aiStreamDoneSequenceRef = useRef<number | null>(null);
+  const keepStreamingPinnedRef = useRef(true);
   const resizeFrameRef = useRef<number | null>(null);
   const scrollRafRef = useRef<number | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isAiResponding, setIsAiResponding] = useState(false);
 
   const ATTACHMENT_PREFIX = '__ATTACHMENT__:';
   const normalizedOtherUserId = typeof otherUserId === 'number' ? otherUserId : Number(otherUserId);
   const hasValidOtherUserId = Number.isFinite(normalizedOtherUserId);
   const isAiAssistantChat = chatType === MessageType.PRIVATE && hasValidOtherUserId && normalizedOtherUserId === AI_ASSISTANT_ID;
 
+  const isNearBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceFromBottom < 96;
+  }, []);
+
   const scrollToBottomInstant = useCallback(() => {
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+        return;
+      }
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
     });
   }, []);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        return;
+      }
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     });
   }, []);
@@ -125,10 +205,89 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   const scrollToBottomThrottled = useCallback(() => {
     if (scrollRafRef.current !== null) return;
     scrollRafRef.current = requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const container = messagesContainerRef.current;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      } else {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }
       scrollRafRef.current = null;
     });
   }, []);
+
+  const flushAiStreamBuffer = useCallback((forceScroll = false) => {
+    const bufferedChunk = aiStreamBufferRef.current;
+    if (!bufferedChunk) return;
+
+    aiStreamBufferRef.current = '';
+    const shouldPinToBottom = forceScroll || keepStreamingPinnedRef.current || isNearBottom();
+
+    setMessages((prev) => {
+      const streamingId = aiStreamingMessageIdRef.current;
+      if (!streamingId) return prev;
+      const idx = prev.findIndex((msg) => msg.id === streamingId);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], content: updated[idx].content + bufferedChunk };
+      return updated;
+    });
+
+    if (shouldPinToBottom) {
+      scrollToBottomThrottled();
+    }
+  }, [isNearBottom, scrollToBottomThrottled]);
+
+  const scheduleAiStreamFlush = useCallback(() => {
+    if (aiStreamFlushTimerRef.current) return;
+    aiStreamFlushTimerRef.current = setTimeout(() => {
+      aiStreamFlushTimerRef.current = null;
+      flushAiStreamBuffer();
+    }, 40);
+  }, [flushAiStreamBuffer]);
+
+  const resetAiStreamOrdering = useCallback(() => {
+    aiStreamBufferRef.current = '';
+    aiStreamNextSequenceRef.current = 0;
+    aiStreamPendingChunksRef.current.clear();
+    aiStreamDoneSequenceRef.current = null;
+  }, []);
+
+  const parseAiStreamEvent = useCallback((payload: string): AiStreamEvent => {
+    const text = String(payload || '');
+    const normalized = text.trim();
+    if (['DONE', '[DONE]', '__END__', AI_STREAM_DONE].includes(normalized)) {
+      return { type: 'done' };
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') {
+        const eventType = parsed.type === 'done' || parsed.type === 'error' ? parsed.type : 'chunk';
+        const sequence = typeof parsed.sequence === 'number' ? parsed.sequence : undefined;
+        const content = typeof parsed.content === 'string' ? parsed.content : '';
+        return { type: eventType, sequence, content };
+      }
+    } catch {
+      // Legacy backend fallback: raw body is the token itself.
+    }
+
+    return { type: 'chunk', content: text };
+  }, []);
+
+  const completeAiStream = useCallback(() => {
+    if (aiStreamFlushTimerRef.current) {
+      clearTimeout(aiStreamFlushTimerRef.current);
+      aiStreamFlushTimerRef.current = null;
+    }
+    flushAiStreamBuffer(true);
+    aiDoneTimerRef.current = setTimeout(() => {
+      aiStreamingMessageIdRef.current = null;
+      resetAiStreamOrdering();
+      setIsAiThinking(false);
+      setIsAiResponding(false);
+      aiDoneTimerRef.current = null;
+    }, 250);
+  }, [flushAiStreamBuffer, resetAiStreamOrdering]);
 
   const aiMarkdownComponents = useMemo(() => ({
     h1: ({ children }: { children?: React.ReactNode }) => (
@@ -202,6 +361,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
       if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
       if (aiDoneTimerRef.current) clearTimeout(aiDoneTimerRef.current);
+      if (aiStreamFlushTimerRef.current) clearTimeout(aiStreamFlushTimerRef.current);
     };
   }, []);
 
@@ -229,6 +389,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         if (filePath) addContextFile(filePath);
       } else if (isAiAssistantChat && msg && msg.type === 'aiAskFailed') {
         aiStreamingMessageIdRef.current = null;
+        resetAiStreamOrdering();
+        if (aiStreamFlushTimerRef.current) {
+          clearTimeout(aiStreamFlushTimerRef.current);
+          aiStreamFlushTimerRef.current = null;
+        }
+        setIsAiThinking(false);
+        setIsAiResponding(false);
         const errorText = typeof msg.error === 'string' && msg.error.trim() ? msg.error : 'AI khong phan hoi!';
         const errorMessage: ChatMessage = {
           id: Date.now() + 1,
@@ -354,6 +521,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const hasText = newMessage.trim().length > 0;
     const payloadContent = pendingAttachment ? encodeAttachment(pendingAttachment) : (hasText ? newMessage.trim() : '👍');
     if (!payloadContent) return;
+    if (isAiAssistantChat && isAiResponding) {
+      return;
+    }
+    if (isAiAssistantChat && !wsService.isConnected()) {
+      alert('AI stream chua ket noi. Vui long doi WebSocket ket noi lai.');
+      return;
+    }
     if (!isAiAssistantChat && !isConnected) {
       alert('WebSocket chưa kết nối. Vui lòng đợi kết nối được thiết lập.');
       return;
@@ -375,6 +549,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       if (isAiAssistantChat) {
         const aiResponseId = Date.now() + Math.floor(Math.random() * 1000) + 1;
         aiStreamingMessageIdRef.current = aiResponseId;
+        resetAiStreamOrdering();
+        keepStreamingPinnedRef.current = true;
+        setIsAiThinking(true);
+        setIsAiResponding(true);
         setMessages((prev) => [
           ...prev,
           {
@@ -399,11 +577,20 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       setPendingAttachment(null);
       if (textareaRef.current) textareaRef.current.style.height = '32px';
       if (!isAiAssistantChat) setTimeout(() => window.parent.postMessage({ type: 'newMessage' }, '*'), 500);
-      setTimeout(() => scrollToBottom(), 80);
+      setTimeout(() => {
+        if (isAiAssistantChat) {
+          scrollToBottomInstant();
+        } else {
+          scrollToBottom();
+        }
+      }, 80);
     } catch (error) {
       console.error('Error sending message:', error);
       if (isAiAssistantChat) {
         aiStreamingMessageIdRef.current = null;
+        resetAiStreamOrdering();
+        setIsAiThinking(false);
+        setIsAiResponding(false);
         setMessages((prev) => [...prev, {
           id: Date.now() + 1,
           senderId: AI_ASSISTANT_ID,
@@ -425,32 +612,64 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     const unsubscribe = wsService.subscribeToAiStream((chunk: string) => {
       if (!chunk) return;
       if (aiDoneTimerRef.current) { clearTimeout(aiDoneTimerRef.current); aiDoneTimerRef.current = null; }
-      const normalizedChunk = String(chunk).trim();
-      if (['DONE', '[DONE]', '__END__', AI_STREAM_DONE].includes(normalizedChunk)) {
-        aiDoneTimerRef.current = setTimeout(() => {
-          aiStreamingMessageIdRef.current = null;
-          aiDoneTimerRef.current = null;
-        }, 700);
+
+      const event = parseAiStreamEvent(chunk);
+      const canFinishSequencedStream = () => {
+        const doneSequence = aiStreamDoneSequenceRef.current;
+        return doneSequence !== null && aiStreamNextSequenceRef.current >= doneSequence;
+      };
+
+      if (event.type === 'done') {
+        if (typeof event.sequence === 'number') {
+          aiStreamDoneSequenceRef.current = event.sequence;
+          if (!canFinishSequencedStream()) return;
+        }
+        completeAiStream();
         return;
       }
 
-      setMessages((prev) => {
-        const streamingId = aiStreamingMessageIdRef.current;
-        if (!streamingId) return prev;
-        const idx = prev.findIndex((msg) => msg.id === streamingId);
-        if (idx === -1) return prev;
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], content: updated[idx].content + chunk };
-        return updated;
-      });
+      if (!aiStreamingMessageIdRef.current) return;
+      keepStreamingPinnedRef.current = isNearBottom();
+      setIsAiThinking(false);
 
-      scrollToBottomThrottled();
+      if (event.type === 'error') {
+        if (event.content) {
+          aiStreamBufferRef.current += event.content;
+          scheduleAiStreamFlush();
+        }
+        completeAiStream();
+        return;
+      }
+
+      if (typeof event.sequence === 'number') {
+        if (event.sequence < aiStreamNextSequenceRef.current) return;
+        aiStreamPendingChunksRef.current.set(event.sequence, event.content || '');
+
+        while (aiStreamPendingChunksRef.current.has(aiStreamNextSequenceRef.current)) {
+          const nextChunk = aiStreamPendingChunksRef.current.get(aiStreamNextSequenceRef.current) || '';
+          aiStreamPendingChunksRef.current.delete(aiStreamNextSequenceRef.current);
+          aiStreamBufferRef.current += nextChunk;
+          aiStreamNextSequenceRef.current += 1;
+        }
+
+        if (canFinishSequencedStream()) {
+          completeAiStream();
+          return;
+        }
+      } else {
+        aiStreamBufferRef.current += event.content || '';
+      }
+
+      setIsAiThinking(false);
+      scheduleAiStreamFlush();
     });
     return () => {
       if (aiDoneTimerRef.current) { clearTimeout(aiDoneTimerRef.current); aiDoneTimerRef.current = null; }
+      if (aiStreamFlushTimerRef.current) { clearTimeout(aiStreamFlushTimerRef.current); aiStreamFlushTimerRef.current = null; }
+      resetAiStreamOrdering();
       if (unsubscribe) unsubscribe();
     };
-  }, [isAiAssistantChat, currentUserId, otherUserName, isConnected, scrollToBottomThrottled]);
+  }, [isAiAssistantChat, currentUserId, otherUserName, isConnected, completeAiStream, isNearBottom, parseAiStreamEvent, resetAiStreamOrdering, scheduleAiStreamFlush]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
@@ -493,6 +712,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!attachment) {
       const isAiMessage = isAiAssistantChat && message.senderId === AI_ASSISTANT_ID;
       if (isAiMessage) {
+        const isCurrentStreamingMsg = message.id === aiStreamingMessageIdRef.current;
+        // Show thinking spinner while AI hasn't sent any text yet
+        if (isAiThinking && isCurrentStreamingMsg && !contentText) {
+          return <ThinkingIndicator />;
+        }
         return (
           <div className="text-[15px] leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={aiMarkdownComponents}>
@@ -527,7 +751,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         </a>
       </div>
     );
-  }, [currentUserId, isAiAssistantChat, otherUserName, aiMarkdownComponents]);
+  }, [currentUserId, isAiAssistantChat, otherUserName, aiMarkdownComponents, isAiThinking]);
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -658,7 +882,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {/* Messages Area */}
-      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-vscode-bg px-3 py-3 [scrollbar-color:var(--vscode-scrollbarSlider-background)_transparent] [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-[var(--vscode-scrollbarSlider-background)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-[6px]">
+      <div ref={messagesContainerRef} className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-vscode-bg px-3 py-3 [scrollbar-color:var(--vscode-scrollbarSlider-background)_transparent] [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-[var(--vscode-scrollbarSlider-background)] [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:w-[6px]">
         {renderedMessages}
         <div ref={messagesEndRef} />
       </div>
@@ -720,9 +944,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
               <button
                 onClick={handleSendMessage}
-                className={`flex h-8 w-8 items-center justify-center rounded-md transition ${newMessage.trim() ? 'text-vscode-fg hover:bg-vscode-hoverBg' : 'cursor-not-allowed text-vscode-desc opacity-40'
+                className={`flex h-8 w-8 items-center justify-center rounded-md transition ${newMessage.trim() && !isAiResponding ? 'text-vscode-fg hover:bg-vscode-hoverBg' : 'cursor-not-allowed text-vscode-desc opacity-40'
                   }`}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || isAiResponding}
                 title="Gui"
               >
                 <Send size={18} strokeWidth={2.2} />
