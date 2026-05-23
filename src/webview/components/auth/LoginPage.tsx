@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import uetLogo from '../assets/uet.jpg';
+﻿import React, { useState } from 'react';
+import uetLogo from '../../assets/uet.jpg';
 
 interface LoginPageProps {
   vscode: any;

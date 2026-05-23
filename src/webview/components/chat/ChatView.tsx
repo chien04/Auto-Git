@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Bot } from 'lucide-react';
-import { AI_ASSISTANT, AI_ASSISTANT_ID } from '../constants/aiConstants';
+import { AI_ASSISTANT, AI_ASSISTANT_ID } from '../../constants/aiConstants';
 
 interface ChatViewProps {
   vscode: any;
-  currentUser: any;
   onOpenChat: (config: any) => void;
-  onChatClosed?: () => void;
 }
 
 interface Classroom {
@@ -41,7 +39,7 @@ type ChatPreview = {
   lastMessageTime?: string;
 };
 
-const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, onChatClosed }) => {
+const ChatView: React.FC<ChatViewProps> = ({ vscode, onOpenChat }) => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [recentPrivateChats, setRecentPrivateChats] = useState<RecentPrivateChat[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -208,21 +206,6 @@ const ChatView: React.FC<ChatViewProps> = ({ vscode, currentUser, onOpenChat, on
     setIsSearching(false);
     setIsSearchFocused(false);
   };
-
-  // Filter chats based on search query
-  const filteredClassrooms = searchQuery.trim()
-    ? classrooms.filter(classroom =>
-      classroom.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classroom.classCode.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    : classrooms;
-
-  const filteredPrivateChats = searchQuery.trim()
-    ? recentPrivateChats.filter(chat =>
-      chat.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      chat.userEmail.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    : recentPrivateChats;
 
   const isSearchMode = isSearchFocused || searchQuery.trim().length > 0;
 

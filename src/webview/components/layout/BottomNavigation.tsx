@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { LayoutDashboard, MessageCircle, Bell, Settings } from 'lucide-react';
 interface BottomNavigationProps {
   activeTab: 'dashboard' | 'chat' | 'notification' | 'settings';

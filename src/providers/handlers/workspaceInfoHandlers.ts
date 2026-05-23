@@ -148,7 +148,7 @@ export async function handleOpenChatContextFile(filePath: string): Promise<void>
     try {
         const targetUri = await resolveWorkspaceFileUri(filePath);
         if (!targetUri) {
-            vscode.window.showWarningMessage('Khong tim thay file trong workspace.');
+            vscode.window.showWarningMessage('Không tìm thấy file trong workspace.');
             return;
         }
 
@@ -156,7 +156,7 @@ export async function handleOpenChatContextFile(filePath: string): Promise<void>
         await vscode.window.showTextDocument(document, { preview: false });
     } catch (error) {
         console.error('[ClassroomViewProvider] Failed to open chat context file:', error);
-        vscode.window.showErrorMessage('Khong mo duoc file tu chat context.');
+        vscode.window.showErrorMessage('Không mở được file từ chat context.');
     }
 }
 

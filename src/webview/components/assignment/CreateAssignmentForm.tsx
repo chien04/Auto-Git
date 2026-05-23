@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import 'katex/dist/katex.min.css';
-import uetLogo from '../assets/uet.jpg';
+import DashboardHeader from '../layout/DashboardHeader';
 
 const ReactMarkdown = require('react-markdown').default;
 const remarkGfm = require('remark-gfm').default;
@@ -70,11 +70,19 @@ const buildDefaultTask = (taskIndex: number): TaskDraft => ({
   sampleTestCases: []
 });
 
+const getTodayDateValue = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, user, classCode, onClose }) => {
   const [title, setTitle] = useState('');
   const [tasks, setTasks] = useState<TaskDraft[]>([buildDefaultTask(1)]);
   const [activeTaskId, setActiveTaskId] = useState(1);
-  const [deadlineDate, setDeadlineDate] = useState('');
+  const [deadlineDate, setDeadlineDate] = useState(getTodayDateValue);
   const [deadlineTime, setDeadlineTime] = useState('23:59');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,6 +93,7 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
   const [tcInput, setTcInput] = useState('');
   const [tcOutput, setTcOutput] = useState('');
   const [tcExplain, setTcExplain] = useState('');
+  const [tcError, setTcError] = useState('');
 
   const activeTask = tasks.find((task) => task.id === activeTaskId) || tasks[0];
 
@@ -105,23 +114,18 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
             fileContent: task.testCasesFile!.base64
           }));
 
-        if (tasksWithFile.length > 0) {
-          vscode.postMessage({
-            type: 'uploadTaskTestCasesZip',
-            assignmentCode,
-            tasks: tasksWithFile
-          });
-          setMessage('Bài tập đã tạo, đang upload test cases theo từng task...');
+        if (tasksWithFile.length !== tasks.length) {
+          setMessage('Thiếu file test cases .zip cho một hoặc nhiều task');
+          setIsSubmitting(false);
           return;
         }
 
-        vscode.postMessage({ type: 'skipTestCases', assignmentCode });
-        setMessage(`Bài tập đã được tạo! Mã: ${assignmentCode}`);
-        setIsSubmitting(false);
-        setTimeout(() => {
-          vscode.postMessage({ type: 'assignmentCreated', classCode });
-          onClose();
-        }, 700);
+        vscode.postMessage({
+          type: 'uploadTaskTestCasesZip',
+          assignmentCode,
+          tasks: tasksWithFile
+        });
+        setMessage('Bài tập đã tạo, đang upload test cases theo từng task...');
       } else if (msg.command === 'createAssignmentError') {
         setMessage(`Lỗi: ${msg.error}`);
         setIsSubmitting(false);
@@ -152,6 +156,46 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
   const toDeadlineValue = (): string | null => {
     if (!deadlineDate) return null;
     return `${deadlineDate}T${deadlineTime || '23:59'}`;
+  };
+
+  const validateBeforeCreate = () => {
+    if (!title.trim()) {
+      setMessage('Vui lòng nhập tên bài tập');
+      return false;
+    }
+
+    if (tasks.length === 0) {
+      setMessage('Vui lòng tạo ít nhất một task');
+      return false;
+    }
+
+    for (const [index, task] of tasks.entries()) {
+      const taskLabel = `Câu ${index + 1}`;
+      if (!task.description.trim()) {
+        setActiveTaskId(task.id);
+        setMessage(`${taskLabel} chưa có mô tả`);
+        return false;
+      }
+
+      if (!task.testCasesFile) {
+        setActiveTaskId(task.id);
+        setMessage(`${taskLabel} chưa có file test cases .zip`);
+        return false;
+      }
+
+      if (task.sampleTestCases.length === 0) {
+        setActiveTaskId(task.id);
+        setMessage(`${taskLabel} cần ít nhất 1 testcase mẫu`);
+        return false;
+      }
+    }
+
+    if (!deadlineDate) {
+      setMessage('Vui lòng chọn ngày deadline');
+      return false;
+    }
+
+    return true;
   };
 
   const addTask = () => {
@@ -188,17 +232,15 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
   };
 
   const handleCreateAssignment = () => {
-    if (!title) { setMessage('Vui lòng nhập tên bài tập'); return; }
-    if (tasks.length === 0) { setMessage('Vui lòng tạo ít nhất một task'); return; }
-    const invalidTask = tasks.find((task) => !task.description.trim());
-    if (invalidTask) { setMessage(`${invalidTask.taskName} chưa có mô tả`); return; }
+    if (isSubmitting) return;
+    if (!validateBeforeCreate()) return;
 
     setIsSubmitting(true);
 
     vscode.postMessage({
       type: 'createAssignment',
       classCode,
-      title,
+      title: title.trim(),
       description: "",
       tasks: tasks.map((task, index) => {
         const nameMatch = task.description.match(/^##\s*(.+)/m);
@@ -245,6 +287,10 @@ const CreateAssignmentForm: React.FC<CreateAssignmentFormProps> = ({ vscode, use
 
   const handleAddTestCaseToMarkdown = () => {
     if (!activeTask) return;
+    if (!tcInput.trim() || !tcOutput.trim()) {
+      setTcError('Testcase mẫu cần có cả input và output');
+      return;
+    }
 
     const nextExampleNumber = activeTask.sampleTestCases.length + 1;
 
@@ -281,6 +327,8 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
     setTcInput('');
     setTcOutput('');
     setTcExplain('');
+    setTcError('');
+    setMessage('');
   };
 
 
@@ -317,29 +365,14 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
     <div className="font-vscode bg-vscode-bg text-vscode-fg min-h-screen flex justify-center w-full">
       <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
 
-        <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
-              <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
-            </div>
-            <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
-            <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
-            <button
-              onClick={() => vscode.postMessage({ type: 'logout' })}
-              className="cursor-pointer flex items-center justify-center p-1.5 rounded-md text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
-              title="Đăng xuất"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
-          </div>
-        </header>
+        <DashboardHeader vscode={vscode} user={user} fallbackName="Giáo viên" />
 
         <form onSubmit={handleSubmit} className="px-5 pt-5 pb-[160px] space-y-5">
+          {message && (
+            <div className="px-3 py-2 rounded-sm bg-[var(--vscode-textBlockQuote-background)] border border-solid border-[var(--vscode-panel-border)] text-[12px] text-vscode-fg leading-relaxed">
+              {message}
+            </div>
+          )}
 
           {/* TÊN BÀI TẬP */}
           <div className="flex flex-col gap-1.5">
@@ -398,7 +431,16 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
                 > Xem trước </button>
               </div>
               {activeTask?.descriptionMode === 'write' && (
-                <button type="button" onClick={() => setIsTcModalOpen(true)} className="text-[12px] text-vscode-link hover:underline px-2">+ Testcase</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTcError('');
+                    setIsTcModalOpen(true);
+                  }}
+                  className="text-[12px] text-vscode-link hover:underline px-2"
+                >
+                  + Testcase
+                </button>
               )}
             </div>
             <div className="p-1">
@@ -442,7 +484,13 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 h-9 bg-transparent border border-solid border-[var(--vscode-button-secondaryBackground)] text-vscode-fg text-[13px] rounded-sm hover:bg-vscode-hoverBg">Hủy</button>
-            <button onClick={handleCreateAssignment} className="flex-[2] h-9 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-[13px] rounded-sm hover:bg-[var(--vscode-button-hoverBackground)] font-bold">Tạo Assignment</button>
+            <button
+              onClick={handleCreateAssignment}
+              disabled={isSubmitting}
+              className="flex-[2] h-9 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] text-[13px] rounded-sm hover:bg-[var(--vscode-button-hoverBackground)] font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Đang tạo...' : 'Tạo Assignment'}
+            </button>
           </div>
         </div>
 
@@ -455,6 +503,11 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
                 <button onClick={() => setIsTcModalOpen(false)} className="text-vscode-desc hover:text-vscode-fg">✕</button>
               </div>
               <div className="space-y-4">
+                {tcError && (
+                  <div className="px-3 py-2 rounded-sm bg-[var(--vscode-inputValidation-errorBackground)] border border-solid border-[var(--vscode-inputValidation-errorBorder)] text-[12px] text-vscode-fg">
+                    {tcError}
+                  </div>
+                )}
                 <textarea value={tcInput} onChange={e => setTcInput(e.target.value)} placeholder="Input" className="w-full bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] p-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
                 <textarea value={tcOutput} onChange={e => setTcOutput(e.target.value)} placeholder="Output" className="w-full bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] p-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />
                 <input value={tcExplain} onChange={e => setTcExplain(e.target.value)} placeholder="Giải thích" className="w-full h-8 bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] px-2 text-[13px] text-vscode-fg outline-none focus:border-[var(--vscode-focusBorder)]" />

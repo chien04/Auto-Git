@@ -1,20 +1,19 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import TeacherForm from './TeacherForm';
-import CreateAssignmentForm from './CreateAssignmentForm';
-import AssignmentList from './AssignmentList';
-import BottomNavigation from './BottomNavigation';
-import ChatView from './ChatView';
-import NotificationView from './NotificationView';
-import ChatWindow from './ChatWindow';
-import { MessageType } from '../services/websocketService';
-import Setting from './Setting';
-import uetLogo from '../assets/uet.jpg';
-import { UserMinus } from 'lucide-react';
+import CreateAssignmentForm from '../assignment/CreateAssignmentForm';
+import AssignmentList from '../assignment/AssignmentList';
+import BottomNavigation from '../layout/BottomNavigation';
+import ChatView from '../chat/ChatView';
+import NotificationView from '../notification/NotificationView';
+import ChatWindow from '../chat/ChatWindow';
+import Setting from '../settings/Setting';
+import DashboardHeader from '../layout/DashboardHeader';
+import TeacherStudentsList from './TeacherStudentsList';
+import { useDashboardChat } from '../chat/useDashboardChat';
 
 interface TeacherDashboardProps {
   vscode: any;
   user: any;
-  apiService: any;
 }
 
 interface ClassItem {
@@ -34,22 +33,14 @@ interface Student {
   joinedAt: string;
 }
 
-const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiService }) => {
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreateAssignmentForm, setShowCreateAssignmentForm] = useState(false);
-  const [classStats, setClassStats] = useState<{ totalStudents: number, studentsSubmitted: number, studentsNotSubmitted: number, submittedPercentage: number, notSubmittedPercentage: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'notification' | 'settings'>('dashboard');
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatConfig, setChatConfig] = useState<{
-    otherUserId?: number;
-    otherUserName?: string;
-    classroomId?: number;
-    classroomName?: string;
-    chatType: MessageType;
-  } | null>(null);
+  const { chatOpen, chatConfig, openChat: handleOpenChat, closeChat } = useDashboardChat();
   const [isViewingAssignmentDetail, setIsViewingAssignmentDetail] = useState(false);
   const isChatDetailOpen = activeTab === 'chat' && chatOpen && !!chatConfig;
 
@@ -63,17 +54,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
           break;
         case 'studentsLoaded':
           setStudents(message.students);
-          // Calculate stats for this class
-          const total = message.students.length;
-          const submitted = message.students.filter((s: Student) => (s.commitCount || 0) > 1).length;
-          const notSubmitted = total - submitted;
-          setClassStats({
-            totalStudents: total,
-            studentsSubmitted: submitted,
-            studentsNotSubmitted: notSubmitted,
-            submittedPercentage: total > 0 ? Math.round((submitted * 100 / total) * 10) / 10 : 0,
-            notSubmittedPercentage: total > 0 ? Math.round((notSubmitted * 100 / total) * 10) / 10 : 0
-          });
           break;
         case 'classCreated':
           vscode.postMessage({ type: 'loadMyClasses' });
@@ -123,7 +103,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     });
   };
 
-  const handleRemoveStudent = (student: Student) => {
+  const handleRemoveStudent = (student: Pick<Student, 'studentId' | 'studentName'>) => {
     if (!selectedClass) {
       return;
     }
@@ -136,11 +116,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     });
   };
 
-  const handleOpenChat = (config: any) => {
-    setChatConfig(config);
-    setChatOpen(true);
-  };
-
   const handleTabChange = (tab: 'dashboard' | 'chat' | 'notification' | 'settings') => {
     setActiveTab(tab);
     if (tab !== 'dashboard') {
@@ -149,9 +124,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     }
     if (tab === 'chat') {
       // Show chat view
-      setChatOpen(false); // Reset individual chat
+      closeChat(); // Reset individual chat
     } else {
-      setChatOpen(false);
+      closeChat();
     }
   };
 
@@ -191,28 +166,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
     return (
       <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
         <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
-          {/* Header - Dùng sideBar-background và z-50 để đặc ruột */}
-          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
-                <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
-              </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
-              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
-              <button
-                onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
-                title="Đăng xuất"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          </header>
+          {/* Header - Dùng sideBar-background và z-50 để đặt ruột */}
+          <DashboardHeader vscode={vscode} user={user} fallbackName="Giáo viên" />
 
           {!isViewingAssignmentDetail && (
             <>
@@ -260,53 +215,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
           <div className="flex-1 overflow-y-auto pb-24">
             <AssignmentList
               vscode={vscode}
-              apiService={apiService}
               classCode={selectedClass.classCode}
               className={selectedClass.className}
               isTeacher={true}
               onViewChange={(isDetailView) => setIsViewingAssignmentDetail(isDetailView)}
-              user={user}
             />
 
             {/* Student List */}
             {!isViewingAssignmentDetail && (
-              <div className="px-4 py-6">
-                <h3 className="text-lg font-bold tracking-tight text-vscode-fg mb-4">
-                  Danh sách sinh viên
-                </h3>
-                {students.length === 0 ? (
-                  <p className="text-sm text-vscode-desc text-center py-8">Chưa có sinh viên nào tham gia</p>
-                ) : (
-                  <div className="border-y border-solid border-[var(--vscode-panel-border)]">
-                    {students.map((student) => (
-                      <div
-                        key={student.studentId}
-                        className="group min-h-[44px] flex items-center gap-3 border-b border-solid border-[var(--vscode-panel-border)] last:border-b-0 hover:bg-vscode-hoverBg transition-colors"
-                      >
-                        <div className="min-w-0 flex-1 py-3">
-                          <div className="font-semibold text-vscode-fg text-sm truncate">{student.studentName}</div>
-                        </div>
-                        <div className="flex items-center gap-2 py-3 pl-2">
-                          <span className="text-xs text-vscode-desc whitespace-nowrap">
-                            Tham gia: {new Date(student.joinedAt).toLocaleDateString('vi-VN')}
-                          </span>
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleRemoveStudent(student);
-                            }}
-                            className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-sm text-vscode-desc opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-bg transition-all"
-                            title="Xóa sinh viên khỏi lớp"
-                            aria-label={`Xóa sinh viên ${student.studentName} khỏi lớp`}
-                          >
-                            <UserMinus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <TeacherStudentsList students={students} onRemoveStudent={handleRemoveStudent} />
             )}
           </div>
 
@@ -325,7 +242,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
         return chatOpen && chatConfig ? (
           <ChatWindow
             vscode={vscode}
-            apiService={apiService}
             currentUserId={Number(user?.userId ?? user?.id)}
             currentUserName={user.name}
             otherUserId={chatConfig.otherUserId}
@@ -333,15 +249,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
             classroomId={chatConfig.classroomId}
             classroomName={chatConfig.classroomName}
             chatType={chatConfig.chatType}
-            onClose={() => setChatOpen(false)}
+            onClose={closeChat}
             fullScreen={true}
           />
         ) : (
           <ChatView
             vscode={vscode}
-            currentUser={user}
             onOpenChat={handleOpenChat}
-            onChatClosed={() => setChatOpen(false)}
           />
         );
 
@@ -451,27 +365,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
       <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
         {/* Header */}
         {!isChatDetailOpen && (
-          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
-                <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
-              </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Giáo viên'}</span>
-              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
-              <button
-                onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
-                title="Đăng xuất"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          </header>
+          <DashboardHeader vscode={vscode} user={user} fallbackName="Giáo viên" />
         )}
 
         {/* Conditional Content Based on Active Tab */}

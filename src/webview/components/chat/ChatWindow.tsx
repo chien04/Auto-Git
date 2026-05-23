@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { ChatMessage, MessageType, getWebSocketService } from '../services/websocketService';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { ChatMessage, MessageType, getWebSocketService } from '../../services/websocketService';
 import { Plus, Send, ThumbsUp, File, X, ImagePlus, Paperclip, Check, CheckCheck, Copy } from 'lucide-react';
-import { ApiService } from '../../services/apiService';
-import { AI_ASSISTANT_ID, AI_STREAM_DONE } from '../constants/aiConstants';
+import { AI_ASSISTANT_ID, AI_STREAM_DONE } from '../../constants/aiConstants';
 import 'katex/dist/katex.min.css';
 
 const ReactMarkdown = require('react-markdown').default;
@@ -73,7 +72,6 @@ type AiStreamEvent = {
 
 interface ChatWindowProps {
   vscode: any;
-  apiService: ApiService;
   currentUserId: number;
   currentUserName: string;
   otherUserId?: number;
@@ -129,7 +127,6 @@ CodeBlock.displayName = 'CodeBlock';
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
   vscode,
-  apiService,
   currentUserId,
   currentUserName,
   otherUserId,

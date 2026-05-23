@@ -1,33 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
-import LoginPage from './LoginPage';
-import WelcomeScreen from './WelcomeScreen';
-import TeacherDashboard from './TeacherDashboard';
-import StudentDashboard from './StudentDashboard';
-import ChatView from './ChatView';
-import ChatWindow from './ChatWindow';
+﻿import React, { useState, useEffect, useRef } from 'react';
+import LoginPage from './auth/LoginPage';
+import WelcomeScreen from './auth/WelcomeScreen';
+import TeacherDashboard from './classroom/TeacherDashboard';
+import StudentDashboard from './classroom/StudentDashboard';
 import { ApiService } from '../../services/apiService';
-import { getWebSocketService, MessageType } from '../services/websocketService';
+import { getWebSocketService } from '../services/websocketService';
 
 interface MainAppProps {
   vscode: any;
 }
 
-type AppView = 'DASHBOARD' | 'CHAT';
-
 const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<AppView>('DASHBOARD');
   const [selectedRole, setSelectedRole] = useState<'TEACHER' | 'STUDENT' | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatConfig, setChatConfig] = useState<{
-    otherUserId?: number;
-    otherUserName?: string;
-    classroomId?: number;
-    classroomName?: string;
-    chatType: MessageType;
-  } | null>(null);
-  const [shouldRefreshChat, setShouldRefreshChat] = useState(false);
   const hasCheckedLogin = useRef(false);
   const apiService = useRef(new ApiService()).current;
   const wsService = useRef(getWebSocketService()).current;
@@ -83,13 +69,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
           }
           setLoading(false);
           break;
-        case 'openChat':
-          // Open chat window from dashboard
-          if (message.config) {
-            setChatConfig(message.config);
-            setChatOpen(true);
-          }
-          break;
       }
     };
 
@@ -115,10 +94,7 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
       }
 
       // ALWAYS set up global subscription (whether newly connected or already connected)
-      const unsubscribe = wsService.subscribeToPrivateMessages(userId, (message) => {
-
-        // Always trigger refresh to update chat list
-        setShouldRefreshChat(prev => !prev);
+      wsService.subscribeToPrivateMessages(userId, (message) => {
 
         // Broadcast message to all components via window.postMessage
         window.postMessage({ type: 'websocketMessage', message }, '*');
@@ -134,15 +110,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     }
   };
 
-  const handleLogout = () => {
-    vscode.postMessage({ type: 'logout' });
-    setUser(null);
-    setSelectedRole(null);
-    setActiveView('DASHBOARD');
-    hasCheckedLogin.current = false;
-    wsService.disconnect();
-  };
-
   const handleSelectRole = (role: 'TEACHER' | 'STUDENT') => {
     setSelectedRole(role);
   };
@@ -150,29 +117,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
   const handleBackToRoleSelection = () => {
     setSelectedRole(null);
   };
-
-  const handleViewChange = (view: AppView) => {
-    setActiveView(view);
-  };
-
-  const handleOpenChat = (config: {
-    otherUserId?: number;
-    otherUserName?: string;
-    classroomId?: number;
-    classroomName?: string;
-    chatType: MessageType;
-  }) => {
-    setChatConfig(config);
-    setChatOpen(true);
-  };
-
-  const handleCloseChat = () => {
-    setChatOpen(false);
-    setChatConfig(null);
-    // Don't auto-refresh to avoid flickering
-    // User can manually refresh if needed, or it will auto-update on next message
-  };
-
 
   if (loading) {
     return (
@@ -200,38 +144,13 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
     <div className="relative flex min-h-screen">
       {/* Main Content */}
       <div className="min-h-screen flex-1">
-        {activeView === 'CHAT' ? (
-          <ChatView
-            vscode={vscode}
-            currentUser={user}
-            onOpenChat={handleOpenChat}
-            onChatClosed={handleCloseChat}
-            key={shouldRefreshChat ? 'refresh' : 'normal'}
-          />
-        ) : user.role === 'TEACHER' ? (
-          <TeacherDashboard vscode={vscode} user={user} apiService={apiService} />
+        {user.role === 'TEACHER' ? (
+          <TeacherDashboard vscode={vscode} user={user} />
         ) : (
           <StudentDashboard vscode={vscode} user={user} apiService={apiService} />
         )}
       </div>
 
-      {/* Chat Window Overlay */}
-      {chatOpen && chatConfig && user && (
-        <div className="fixed bottom-5 right-5 z-[1000] rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
-          <ChatWindow
-            vscode={vscode}
-            apiService={apiService}
-            currentUserId={resolveUserId(user)}
-            currentUserName={user.name}
-            otherUserId={chatConfig.otherUserId}
-            otherUserName={chatConfig.otherUserName}
-            classroomId={chatConfig.classroomId}
-            classroomName={chatConfig.classroomName}
-            chatType={chatConfig.chatType}
-            onClose={handleCloseChat}
-          />
-        </div>
-      )}
     </div>
   );
 };

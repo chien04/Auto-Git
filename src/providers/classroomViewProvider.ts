@@ -46,9 +46,6 @@ import {
     handleVerifyOTP
 } from './handlers/authHandlers';
 import {
-    handleSelectFolder
-} from './handlers/workspaceHandlers';
-import {
     AssignmentHandlerDeps,
     handleCreateAssignment,
     handleDeleteAssignment,
@@ -57,11 +54,7 @@ import {
     handleGetAssignmentSubmissions,
     handleJoinAssignmentWithPrompt,
     handleOpenAssignment,
-    handleOpenAssignmentFolder,
-    handleOpenTeacherAssignment,
-    handleSkipTestCases,
     handleUploadTaskTestCasesZip,
-    handleViewAssignment,
     viewTaskResult
 } from './handlers/assignmentHandlers';
 import { getBaseDirectoryKey } from '../utils/localWorkspaceStore';
@@ -171,10 +164,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleLogout();
                 break;
 
-            case 'selectFolder':
-                await this._handleSelectFolder();
-                break;
-
             case 'createClass':
                 await this._handleCreateClass(message.className);
                 break;
@@ -197,28 +186,12 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleUploadTaskTestCasesZip(message.assignmentCode, message.tasks);
                 break;
 
-            case 'skipTestCases':
-                await this._handleSkipTestCases(message.assignmentCode);
-                break;
-
             case 'joinAssignment':
                 await this._handleJoinAssignmentWithPrompt(message.assignmentCode);
                 break;
 
-            case 'viewAssignment':
-                await this._handleViewAssignment(message.assignmentCode);
-                break;
-
-            case 'openTeacherAssignment':
-                await this._handleOpenTeacherAssignment(message.assignmentCode);
-                break;
-
             case 'openAssignment':
                 await this._handleOpenAssignment(message.assignmentCode);
-                break;
-
-            case 'openAssignmentFolder':
-                await this._handleOpenAssignmentFolder(message.assignmentCode);
                 break;
 
             case 'loadMyClasses':
@@ -243,23 +216,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
             case 'removeStudent':
                 await this._handleRemoveStudent(message.classCode, message.studentId, message.studentName);
-                break;
-
-            case 'copyToClipboard':
-                await vscode.env.clipboard.writeText(message.text);
-                vscode.window.showInformationMessage('Đã copy vào clipboard!');
-                break;
-
-            case 'openUrl':
-                await vscode.env.openExternal(vscode.Uri.parse(message.url));
-                break;
-
-            case 'openChat':
-                // Forward openChat message to webview
-                this._postMessage({
-                    type: 'openChat',
-                    config: message.config
-                });
                 break;
 
             case 'getAssignments':
@@ -383,10 +339,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleLogout(this._context, this.apiService, (message) => this._postMessage(message));
     }
 
-    private async _handleSelectFolder() {
-        await handleSelectFolder((message) => this._postMessage(message));
-    }
-
     private async _handleCreateClass(className: string) {
         await handleCreateClass(this.apiService, className, (message) => this._postMessage(message));
     }
@@ -413,27 +365,12 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
         await handleUploadTaskTestCasesZip(this._getAssignmentHandlerDeps(), assignmentCode, tasks || []);
     }
 
-    private async _handleSkipTestCases(assignmentCode: string) {
-        await handleSkipTestCases(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
     private async _handleJoinAssignmentWithPrompt(assignmentCode: string) {
         await handleJoinAssignmentWithPrompt(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
-    private async _handleViewAssignment(assignmentCode: string) {
-        await handleViewAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
     private async _handleOpenAssignment(assignmentCode: string) {
         await handleOpenAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
-    private async _handleOpenTeacherAssignment(assignmentCode: string) {
-        await handleOpenTeacherAssignment(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-    private async _handleOpenAssignmentFolder(assignmentCode: string) {
-        await handleOpenAssignmentFolder(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
     private async _handleRemoveStudent(classCode: string, studentId: string, studentName: string) {

@@ -1,5 +1,5 @@
-import React from 'react';
-import uetLogo from '../assets/uet.jpg';
+﻿import React from 'react';
+import uetLogo from '../../assets/uet.jpg';
 
 interface WelcomeScreenProps {
   onSelectRole: (role: 'student' | 'teacher') => void;
@@ -10,8 +10,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
     // Áp dụng font-vscode, màu nền và màu chữ gốc cho toàn bộ màn hình
     <div className="flex flex-col min-h-screen max-w-[420px] mx-auto px-6 py-8 font-vscode bg-vscode-bg text-vscode-fg">
 
-      {/* Header */}
-      <header className="flex flex-col items-center text-center gap-6 mt-4 mb-8">
+      {/* Branding */}
+      <section className="flex flex-col items-center text-center gap-6 mt-4 mb-8">
         <div className="flex items-center gap-2">
           {/* Logo */}
           <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
@@ -25,7 +25,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onSelectRole }) => {
         <p className="text-sm font-medium text-vscode-desc">
           Bắt đầu bằng cách chọn vai trò của bạn
         </p>
-      </header>
+      </section>
 
       {/* Main Content */}
       <main className="flex flex-col gap-4 w-full">

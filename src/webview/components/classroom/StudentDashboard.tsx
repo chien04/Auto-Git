@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import StudentForm from './StudentForm';
-import AssignmentList from './AssignmentList';
-import BottomNavigation from './BottomNavigation';
-import NotificationView from './NotificationView';
-import Settings from './Setting';
-import ChatView from './ChatView';
-import ChatWindow from './ChatWindow';
-import { MessageType } from '../services/websocketService';
-import uetLogo from '../assets/uet.jpg';
+import AssignmentList from '../assignment/AssignmentList';
+import BottomNavigation from '../layout/BottomNavigation';
+import NotificationView from '../notification/NotificationView';
+import Settings from '../settings/Setting';
+import ChatView from '../chat/ChatView';
+import ChatWindow from '../chat/ChatWindow';
+import DashboardHeader from '../layout/DashboardHeader';
+import { useDashboardChat } from '../chat/useDashboardChat';
 
 interface StudentDashboardProps {
   vscode: any;
@@ -57,14 +57,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
   const [isViewingAssignmentDetail, setIsViewingAssignmentDetail] = useState(false);
   const [notificationTargetAssignmentCode, setNotificationTargetAssignmentCode] = useState<string | undefined>(undefined);
   const [notificationTargetAssignmentData, setNotificationTargetAssignmentData] = useState<AssignmentItem | undefined>(undefined);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatConfig, setChatConfig] = useState<{
-    otherUserId?: number;
-    otherUserName?: string;
-    classroomId?: number;
-    classroomName?: string;
-    chatType: MessageType;
-  } | null>(null);
+  const { chatOpen, chatConfig, openChat: handleOpenChat, closeChat } = useDashboardChat();
   const isChatDetailOpen = activeTab === 'chat' && chatOpen && !!chatConfig;
 
   const handleTabChange = (tab: 'dashboard' | 'chat' | 'notification' | 'settings') => {
@@ -74,19 +67,8 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
       setViewAssignments(false);
     }
     if (tab !== 'chat') {
-      setChatOpen(false);
+      closeChat();
     }
-  };
-
-  const handleOpenChat = (config: {
-    otherUserId?: number;
-    otherUserName?: string;
-    classroomId?: number;
-    classroomName?: string;
-    chatType: MessageType;
-  }) => {
-    setChatConfig(config);
-    setChatOpen(true);
   };
 
   const handleNotificationAction = async (notification: NotificationActionItem) => {
@@ -170,10 +152,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
     });
   };
 
-  const handleOpenRepo = (url: string) => {
-    vscode.postMessage({ type: 'openUrl', url });
-  };
-
   if (showJoinForm) {
     return (
       <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
@@ -196,28 +174,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
       <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
         <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
 
-          {/* Header */}
-          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
-                <img src={uetLogo} alt="UET Logo" className="w-full h-full object-contain rounded-sm" />
-              </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>
-              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
-              <button
-                onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
-                title="Đăng xuất"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          </header>
+          <DashboardHeader vscode={vscode} user={user} fallbackName="Sinh viên" />
 
           {/* Back Button and Class Info */}
           {!isViewingAssignmentDetail && (
@@ -248,7 +205,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
           <div className="flex-1 overflow-y-auto pb-24">
             <AssignmentList
               vscode={vscode}
-              apiService={apiService}
               classCode={selectedClass.classCode}
               className={selectedClass.className}
               isTeacher={false}
@@ -260,7 +216,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
                 setNotificationTargetAssignmentData(undefined);
               }}
               onViewChange={(isDetailView) => setIsViewingAssignmentDetail(isDetailView)}
-              user={user}
             />
           </div>
 
@@ -277,7 +232,6 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
         return chatOpen && chatConfig ? (
           <ChatWindow
             vscode={vscode}
-            apiService={apiService}
             currentUserId={Number(user?.userId ?? user?.id)}
             currentUserName={user.name}
             otherUserId={chatConfig.otherUserId}
@@ -285,15 +239,13 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             classroomId={chatConfig.classroomId}
             classroomName={chatConfig.classroomName}
             chatType={chatConfig.chatType}
-            onClose={() => setChatOpen(false)}
+            onClose={closeChat}
             fullScreen={true}
           />
         ) : (
           <ChatView
             vscode={vscode}
-            currentUser={user}
             onOpenChat={handleOpenChat}
-            onChatClosed={() => setChatOpen(false)}
           />
         );
 
@@ -321,7 +273,7 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
             <div className="pt-8 px-5 pb-5 border-b border-solid border-[var(--vscode-panel-border)]">
               <div className="flex flex-col gap-1">
                 <h2 className="text-2xl font-black leading-tight tracking-tight text-vscode-fg">Dashboard</h2>
-                <p className="text-vscode-desc text-[13px] font-medium">Tổng quan sinh viên</p>
+                <p className="text-vscode-desc text-[13px] font-medium">Tổng quan Sinh viên</p>
               </div>
             </div>
 
@@ -422,31 +374,9 @@ const StudentDashboard: React.FC<StudentDashboardProps> = ({ vscode, user, apiSe
     <div className="font-vscode bg-[var(--vscode-sideBar-background)] text-vscode-fg min-h-screen flex justify-center w-full">
       <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
 
-        {/* Header - Dùng sideBar-background và z-50 để đặc ruột */}
+        {/* Header - Dùng sideBar-background và z-50 để đặt ruột */}
         {!isChatDetailOpen && (
-          <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 text-vscode-link flex items-center justify-center rounded-sm">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 48 48">
-                  <path d="M44 4H30.6666V17.3334H17.3334V30.6666H4V44H44V4Z" />
-                </svg>
-              </div>
-              <h1 className="text-lg font-bold tracking-tight text-vscode-fg">CodingRooms</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-vscode-fg">{user?.name || 'Sinh viên'}</span>
-              <div className="w-px h-4 bg-[var(--vscode-panel-border)]"></div>
-              <button
-                onClick={() => vscode.postMessage({ type: 'logout' })}
-                className="cursor-pointer flex items-center justify-center p-1.5 rounded-sm text-vscode-desc hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-hoverBg transition-colors"
-                title="Đăng xuất"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
-          </header>
+          <DashboardHeader vscode={vscode} user={user} fallbackName="Sinh viên" />
         )}
 
         {renderContent()}

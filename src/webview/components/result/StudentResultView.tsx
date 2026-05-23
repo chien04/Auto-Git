@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Code2, ChevronDown } from 'lucide-react';
 
 interface TaskDTO {

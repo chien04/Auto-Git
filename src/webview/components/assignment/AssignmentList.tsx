@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+﻿import React, { useState, useEffect, useLayoutEffect } from 'react';
 import AssignmentDetail from './AssignmentDetail';
 
 interface AssignmentListProps {
   vscode: any;
-  apiService: any;
   classCode: string;
   isTeacher: boolean;
   currentAssignmentCode?: string; // Assignment code of currently opened workspace
@@ -12,7 +11,6 @@ interface AssignmentListProps {
   onInitialAssignmentHandled?: () => void;
   onViewChange?: (isDetailView: boolean) => void; // Notify parent when view changes
   className?: string;
-  user: any;
 }
 
 interface Assignment {
@@ -34,7 +32,6 @@ interface Assignment {
 
 const AssignmentList: React.FC<AssignmentListProps> = ({
   vscode,
-  apiService,
   classCode,
   isTeacher,
   currentAssignmentCode,
@@ -42,8 +39,7 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
   initialAssignmentData,
   onInitialAssignmentHandled,
   onViewChange,
-  className,
-  user
+  className
 }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,7 +158,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
     return (
       <AssignmentDetail
         vscode={vscode}
-        apiService={apiService}
         assignment={{
           ...selectedAssignment,
           className: className,
@@ -173,7 +168,6 @@ const AssignmentList: React.FC<AssignmentListProps> = ({
           setSelectedAssignment(null);
         }}
         isTeacher={isTeacher}
-        user={user}
       />
     );
   }

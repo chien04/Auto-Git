@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { StudentSubmissionDTO } from '../../services/apiService';
-import StudentResultView from './StudentResultView';
+﻿import React, { useState, useEffect } from 'react';
+import { StudentSubmissionDTO } from '../../../services/apiService';
+import StudentResultView from '../result/StudentResultView';
 import 'katex/dist/katex.min.css';
 import { FileSpreadsheet, RefreshCw } from 'lucide-react';
 
@@ -11,11 +11,9 @@ const rehypeKatex = require('rehype-katex').default;
 
 interface AssignmentDetailProps {
   vscode: any;
-  apiService: any;
   assignment: Assignment;
   onBack: () => void;
   isTeacher?: boolean;
-  user: any;
 }
 
 interface Assignment {
@@ -39,7 +37,7 @@ interface AssignmentTask {
   description?: string;
 }
 
-const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService, assignment, onBack, isTeacher = true, user }) => {
+const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, assignment, onBack, isTeacher = true }) => {
   const [submissions, setSubmissions] = useState<StudentSubmissionDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTaskId, setActiveTaskId] = useState(1);
@@ -101,14 +99,6 @@ const AssignmentDetail: React.FC<AssignmentDetailProps> = ({ vscode, apiService,
       type: 'getAssignmentSubmissions',
       assignmentCode: assignment.assignmentCode
     });
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    return `Tháng ${month}, ${day}`;
   };
 
   const handleTeacherViewResult = (student: StudentSubmissionDTO) => {
