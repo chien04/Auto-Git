@@ -60,7 +60,6 @@ import {
     handleOpenAssignmentFolder,
     handleOpenTeacherAssignment,
     handleSkipTestCases,
-    handleSyncAssignmentWorkspace,
     handleUploadTaskTestCasesZip,
     handleViewAssignment,
     viewTaskResult
@@ -157,7 +156,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 break;
 
             case 'googleLogin':
-                await this._handleGoogleLogin(message.role || 'STUDENT');
+                await this._handleGoogleLogin(message.role);
                 break;
 
             case 'requestOtp':
@@ -165,7 +164,7 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 break;
 
             case 'verifyOtp':
-                await this._handleVerifyOTP(message.email, message.otp, message.role || 'STUDENT');
+                await this._handleVerifyOTP(message.email, message.otp, message.role);
                 break;
 
             case 'logout':
@@ -278,10 +277,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                     message.title
                 );
                 break;
-            case 'syncAssignmentWorkspace':
-                await this._handleSyncAssignmentWorkspace(message.assignmentCode);
-                break;
-
             case 'deleteAssignment':
                 await this._handleDeleteAssignment(message.assignmentCode, message.title);
                 break;
@@ -481,10 +476,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
     private async _handleGetAssignmentSubmissions(assignmentCode: string) {
         await handleGetAssignmentSubmissions(this._getAssignmentHandlerDeps(), assignmentCode);
-    }
-
-    private async _handleSyncAssignmentWorkspace(assignmentCode: string) {
-        await handleSyncAssignmentWorkspace(this._getAssignmentHandlerDeps(), assignmentCode);
     }
 
     private async _handleDeleteAssignment(assignmentCode: string, title?: string) {

@@ -76,14 +76,6 @@ export async function handleCreateAssignment(
 
                 ensureStudentsIgnored(clonePath);
 
-                progress.report({ increment: 20, message: 'Đang khởi tạo workspace...' });
-                await deps.gitService.initializeWorkspace(clonePath, {
-                    token: response.token,
-                    repoUrl: response.repoUrl,
-                    branch: 'teacher'
-                });
-                deps.gitService.enableAutoPush();
-
                 upsertRoom(baseDirectory, userData.userId, response.assignmentCode, relativePath, response.repoUrl, 'teacher');
 
                 const assignmentInfo = {
@@ -234,10 +226,6 @@ export async function handleJoinAssignment(
 
             console.log('[DEBUG] Clone completed at:', clonePath);
 
-            progress.report({ increment: 20, message: 'Đang khởi tạo workspace...' });
-            deps.gitService.setClassInfo(deps.apiService, assignmentCode);
-            deps.gitService.enableAutoPush();
-
             deps.postMessage({
                 type: 'assignmentJoinedSuccess',
                 assignmentCode
@@ -249,7 +237,7 @@ export async function handleJoinAssignment(
 
             progress.report({ increment: 20, message: 'Hoàn tất tham gia bài tập.' });
             vscode.window.showInformationMessage(
-                'Repository bài tập đã được clone! Auto-push đã được kích hoạt.'
+                'Repository bài tập đã được clone!'
             );
         });
     } catch (error: any) {
@@ -604,41 +592,6 @@ export async function handleGetAssignmentSubmissions(
     }
 }
 
-export async function handleSyncAssignmentWorkspace(
-    deps: AssignmentHandlerDeps,
-    assignmentCode: string
-): Promise<void> {
-    try {
-        const userData = deps.context.globalState.get<any>('user_data');
-        if (!userData?.userId) {
-            throw new Error('Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
-        }
-
-        const baseDirectory = await ensureBaseDirectory(deps.context, userData.userId);
-        if (!baseDirectory) {
-            throw new Error('Cần chọn thư mục gốc để đồng bộ workspace.');
-        }
-
-        const roomData = getRoomData(baseDirectory, userData.userId, assignmentCode);
-        if (!roomData.found || !roomData.fullPath) {
-            throw new Error('Không tìm thấy assignment trong .coding-rooms.json để đồng bộ.');
-        }
-
-        vscode.window.showInformationMessage('Đang đồng bộ code từ sinh viên...');
-        await deps.apiService.syncAssignmentWorkspace(assignmentCode, roomData.fullPath);
-        deps.postMessage({
-            type: 'syncWorkspaceSuccess'
-        });
-        vscode.window.showInformationMessage('Đã đồng bộ code mới nhất!');
-    } catch (error: any) {
-        deps.postMessage({
-            type: 'syncWorkspaceError',
-            error: error.message
-        });
-        vscode.window.showErrorMessage(`Lỗi đồng bộ: ${error.message}`);
-    }
-}
-
 export async function handleSyncTeacherWorkspaceBestEffort(
     deps: AssignmentHandlerDeps,
     assignmentCode: string,
@@ -659,11 +612,34 @@ export async function handleSyncTeacherWorkspaceBestEffort(
             return;
         }
 
-        await deps.apiService.syncAssignmentWorkspace(assignmentCode, roomData.fullPath);
+        await syncTeacherWorkspaceLocally(deps, assignmentCode, roomData.fullPath);
     } catch (error: any) {
         console.warn('[DEBUG] Teacher auto-sync failed before open:', error?.message || error);
         vscode.window.showWarningMessage(`Không thể đồng bộ trước khi mở: ${error?.message || 'Unknown error'}`);
     }
+}
+
+async function syncTeacherWorkspaceLocally(
+    deps: AssignmentHandlerDeps,
+    assignmentCode: string,
+    localPath: string
+): Promise<void> {
+    const storedInfo = deps.context.globalState.get<any>(`assignment_${assignmentCode}`) || {};
+    const currentClass = deps.context.globalState.get<any>('current_class') || {};
+    const fallbackInfo = currentClass.assignmentCode === assignmentCode ? currentClass : {};
+    const students = await deps.apiService.getAssignmentStudents(assignmentCode);
+
+    ensureStudentsIgnored(localPath);
+
+    await deps.gitService.syncTeacherWorkspace({
+        localPath,
+        students: (students || []).map((student: any) => ({
+            studentName: student.studentName,
+            branchName: student.branchName
+        })),
+        repoUrl: storedInfo.repoUrl || fallbackInfo.repoUrl,
+        token: storedInfo.token || fallbackInfo.token
+    });
 }
 
 async function triggerVectorDbUploadInBackground(

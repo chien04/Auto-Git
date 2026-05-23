@@ -9,7 +9,7 @@ import simpleGit from 'simple-git';
 import {
 	checkGitInstalled,
 	notifyFrontendOfCurrentWorkspace,
-	restoreGitServiceState,
+	restoreRuntimeState,
 	tryOpenPendingNotificationFile
 } from './extension/runtimeLifecycle';
 
@@ -452,7 +452,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			await context.globalState.update('user_data', undefined);
 			await context.globalState.update('current_class', undefined);
 			apiService.setToken(null);
-			gitService.disableAutoPush();
 			vscode.window.showInformationMessage('Đã đăng xuất và xóa dữ liệu');
 		}
 	);
@@ -621,8 +620,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		submitCodeCommand
 	);
 
-	// Restore git service state if student has joined a class
-	await restoreGitServiceState(context, runtimeDeps);
+	await restoreRuntimeState(context, runtimeDeps);
 	await closeAllOpenEditors();
 	await tryOpenPendingNotificationFile(context);
 	suppressCommentAutoLoad = false;
@@ -640,7 +638,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Listen for workspace folder changes to update UI
 	vscode.workspace.onDidChangeWorkspaceFolders(async () => {
 		console.log('[DEBUG] Workspace folders changed, restoring state...');
-		await restoreGitServiceState(context, runtimeDeps);
+		await restoreRuntimeState(context, runtimeDeps);
 		await tryOpenPendingNotificationFile(context);
 		notifyCurrentFileCommentContext(context, vscode.window.activeTextEditor);
 		await loadAndRenderCommentsForEditor(

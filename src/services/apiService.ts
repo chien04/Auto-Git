@@ -395,9 +395,7 @@ export class ApiService {
     }
 
     async deleteClass(classCode: string): Promise<void> {
-        console.log('apiService.deleteClass called with:', classCode);
         try {
-            console.log('Making DELETE request to:', `/class/${classCode}`);
             const response = await this.api.delete(`/class/${classCode}`);
             console.log('Delete class response:', response);
         } catch (error: any) {
@@ -415,20 +413,6 @@ export class ApiService {
         } catch (error: any) {
             console.error('Leave class API error:', error);
             throw new Error(`Failed to leave class: ${error.response?.data?.message || error.message}`);
-        }
-    }
-
-    async syncAssignmentWorkspace(assignmentCode: string, localPath?: string): Promise<{ message: string }> {
-        try {
-            console.log('[API] Syncing assignment workspace:', assignmentCode);
-            const response = await this.api.post(`/assignment/${assignmentCode}/workspace/sync`, {
-                localPath: localPath || null
-            });
-            console.log('[API] Sync workspace response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Sync workspace error:', error);
-            throw new Error(`Failed to sync workspace: ${error.response?.data?.error || error.message}`);
         }
     }
 

@@ -296,7 +296,6 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
     e.target.style.height = `${Math.max(220, e.target.scrollHeight)}px`;
   };
 
-  // 1. Sửa lại Markdown Components để đồng bộ màu sắc VS Code
   const markdownPreviewComponents = {
     h1: ({ children }: any) => <h1 className="mb-3 text-xl font-bold tracking-tight text-vscode-fg border-b border-solid border-[var(--vscode-panel-border)] pb-1">{children}</h1>,
     h2: ({ children }: any) => <h2 className="mb-2 mt-5 text-lg font-bold text-vscode-fg">{children}</h2>,
@@ -315,11 +314,9 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
   };
 
   return (
-    // 2. Container chính: bg-vscode-bg phải bao phủ toàn bộ min-h-screen
     <div className="font-vscode bg-vscode-bg text-vscode-fg min-h-screen flex justify-center w-full">
       <div className="flex flex-col min-h-screen max-w-[420px] w-full mx-auto relative">
 
-        {/* HEADER: Fix lỗi trong suốt bằng cách dùng màu nền đặc và z-50 */}
         <header className="flex items-center justify-between px-4 py-4 border-b border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] sticky top-0 z-50">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-white p-[2px]">
@@ -342,7 +339,6 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
           </div>
         </header>
 
-        {/* FORM CONTENT: Padding bottom 160px để không bị lấp bởi thanh Deadline */}
         <form onSubmit={handleSubmit} className="px-5 pt-5 pb-[160px] space-y-5">
 
           {/* TÊN BÀI TẬP */}
@@ -433,7 +429,6 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
           </div>
         </form>
 
-        {/* BOTTOM DEADLINE BAR: Fix lỗi trong suốt bằng màu nền đặc và z-50 */}
         <div className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-[var(--vscode-sideBar-background)] border-t border-solid border-[var(--vscode-panel-border)] p-4 flex flex-col gap-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
           <div className="flex gap-4">
             <div className="flex-1 flex flex-col gap-1.5">
@@ -455,7 +450,6 @@ ${newSample.explain ? `**Giải thích:** ${newSample.explain}\n\n` : ''}---
         {isTcModalOpen && (
           <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
             <div className="bg-[var(--vscode-editorWidget-background)] border border-solid border-[var(--vscode-widget-border)] rounded-sm w-full max-w-[380px] shadow-2xl p-4">
-              {/* Nội dung modal của bạn ở đây */}
               <div className="flex justify-between items-center mb-4">
                 <span className="text-[13px] font-bold uppercase text-vscode-fg">Thêm Testcase mẫu</span>
                 <button onClick={() => setIsTcModalOpen(false)} className="text-vscode-desc hover:text-vscode-fg">✕</button>

@@ -70,8 +70,7 @@ export async function handleLoadMyClasses(
         console.log('[Extension] API result:', result);
 
         const userData = context.globalState.get<any>('user_data');
-        const role = userData?.role || 'STUDENT';
-        console.log('[Extension] User role:', role);
+        const role = userData?.role;
 
         let classesToSend = [];
         if (role === 'TEACHER') {
@@ -79,9 +78,6 @@ export async function handleLoadMyClasses(
         } else {
             classesToSend = result.studentClasses || [];
         }
-
-        console.log('[Extension] Sending classes:', classesToSend);
-        console.log('[Extension] Number of classes:', classesToSend.length);
 
         postMessage({
             type: 'classesLoaded',
@@ -123,19 +119,17 @@ export async function handleDeleteClass(
 
     const classNameDisplay = className || classCode;
     const confirm = await vscode.window.showWarningMessage(
-        `Bạn có chắc muốn xóa lớp "${classNameDisplay}"?\n\nRepository GitHub sẽ bị xóa vĩnh viễn!`,
+        `Bạn có chắc muốn xóa lớp "${classNameDisplay}"?`,
         { modal: true },
-        'Xóa',
-        'Hủy'
+        'delete',
     );
 
-    if (confirm !== 'Xóa') {
+    if (confirm !== 'delete') {
         console.log('Delete cancelled by user');
         return;
     }
 
     try {
-        console.log('Calling apiService.deleteClass...');
         await apiService.deleteClass(classCode);
         console.log('Delete class successful');
 

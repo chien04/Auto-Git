@@ -3,12 +3,15 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import simpleGit from 'simple-git';
 import { ApiService } from '../services/apiService';
-import { GitService } from '../services/gitService';
 import { ClassroomViewProvider } from '../providers/classroomViewProvider';
+import {
+    ensureBaseDirectory,
+    getCurrentAssignmentCodeFromWorkspace,
+    getRoomData
+} from '../utils/localWorkspaceStore';
 
 export interface RuntimeLifecycleDeps {
     apiService: ApiService;
-    gitService: GitService;
     classroomViewProvider: ClassroomViewProvider;
 }
 
@@ -17,18 +20,19 @@ export function notifyFrontendOfCurrentWorkspace(
     deps: RuntimeLifecycleDeps
 ): void {
     try {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) {
+        const userData = context.globalState.get<any>('user_data');
+        if (!userData?.userId) {
             return;
         }
 
-        const folderName = workspaceFolders[0].uri.fsPath.split(/[\\/]/).pop() || '';
-        const assignmentCode = folderName.split('-')[0];
+        const assignmentCode = getCurrentAssignmentCodeFromWorkspace(context, userData.userId);
+        if (!assignmentCode) {
+            return;
+        }
 
-        console.log('[DEBUG] Notifying frontend of current workspace:', assignmentCode);
         deps.classroomViewProvider.notifyWorkspaceChanged(assignmentCode);
     } catch (error) {
-        console.error('[DEBUG] Error notifying frontend:', error);
+        console.error('[Workspace] Failed to notify frontend of current workspace:', error);
     }
 }
 
@@ -65,183 +69,53 @@ export async function tryOpenPendingNotificationFile(context: vscode.ExtensionCo
     }
 }
 
-export async function restoreGitServiceState(
+export async function restoreRuntimeState(
     context: vscode.ExtensionContext,
     deps: RuntimeLifecycleDeps
 ): Promise<void> {
     try {
         const token = context.globalState.get<string>('jwt_token');
+        deps.apiService.setToken(token || null);
 
-        if (token) {
-            deps.apiService.setToken(token);
+        const userData = context.globalState.get<any>('user_data');
+        if (!userData?.userId) {
+            return;
         }
 
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const workspacePath = workspaceFolders[0].uri.fsPath;
-            const folderName = workspacePath.split(/[\\/]/).pop() || '';
-            console.log('Workspace folder name:', folderName);
-
-            const git = simpleGit(workspacePath);
-            try {
-                await git.status();
-
-                const currentBranch = await git.revparse(['--abbrev-ref', 'HEAD']);
-                const currentGitBranch = currentBranch.trim();
-                console.log('Current git branch:', currentGitBranch);
-
-                const remotes = await git.getRemotes(true);
-                const originRemote = remotes.find((r: any) => r.name === 'origin');
-
-                if (originRemote && originRemote.refs.fetch) {
-                    const repoUrl = originRemote.refs.fetch.replace(/\.git$/, '').replace(/^.*@github\.com[:/]/, 'https://github.com/');
-                    console.log('Repository URL:', repoUrl);
-
-                    const folderParts = folderName.split('-');
-                    let assignmentCode = folderParts[0] || '';
-                    let role = 'student';
-                    let branch = currentGitBranch;
-                    let savedToken: string | undefined;
-
-                    const currentClass = context.globalState.get<any>('current_class');
-                    const isCurrentClassForThisWorkspace = !!(
-                        currentClass?.assignmentCode &&
-                        assignmentCode &&
-                        String(currentClass.assignmentCode) === String(assignmentCode)
-                    );
-                    const savedInfo = isCurrentClassForThisWorkspace ? currentClass : null;
-
-                    if (savedInfo?.assignmentCode) {
-                        assignmentCode = savedInfo.assignmentCode;
-                    }
-                    if (savedInfo?.role) {
-                        role = savedInfo.role;
-                    }
-                    if (savedInfo?.branch) {
-                        branch = savedInfo.branch;
-                    }
-
-                    const expectedStudentBranchFromFolder =
-                        assignmentCode && folderName.startsWith(`${assignmentCode}-student-`)
-                            ? folderName.substring(assignmentCode.length + 1)
-                            : null;
-
-                    if (!savedInfo?.branch) {
-                        if (branch === 'main' || branch === 'master' || branch === 'teacher') {
-                            role = 'teacher';
-                            if (folderParts.length > 1) {
-                                assignmentCode = folderParts[1];
-                            }
-                        } else {
-                            role = 'student';
-                        }
-                    }
-
-                    if (!savedInfo?.branch && role === 'student' && expectedStudentBranchFromFolder) {
-                        branch = expectedStudentBranchFromFolder;
-                    }
-
-                    const roleSpecificKey = role === 'teacher'
-                        ? `assignment_${assignmentCode}`
-                        : `student_assignment_${assignmentCode}`;
-                    const roleSpecificInfo = context.globalState.get<any>(roleSpecificKey) || {};
-
-                    savedToken = savedInfo?.token || roleSpecificInfo?.token;
-                    const savedDeadline = savedInfo?.deadline || roleSpecificInfo?.deadline;
-                    const savedBranch = savedInfo?.branch || roleSpecificInfo?.branch;
-
-                    if (savedBranch && !savedInfo?.branch) {
-                        branch = savedBranch;
-                    }
-                    console.log('Final detected:', {
-                        assignmentCode,
-                        role,
-                        branch,
-                        branchSource: savedInfo?.branch
-                            ? 'current_class'
-                            : savedBranch
-                                ? roleSpecificKey
-                                : (expectedStudentBranchFromFolder ? 'workspace_folder' : 'git_current_branch')
-                    });
-                    console.log('[DEBUG] Final token for git service:', savedToken ? 'EXISTS (length: ' + savedToken.length + ')' : 'NULL');
-
-                    if (savedToken) {
-                        console.log('[DEBUG] Initializing git service with token...');
-
-                        if (branch !== currentGitBranch) {
-                            console.log(`Branch mismatch! Git: ${currentGitBranch}, Saved: ${branch}`);
-                            console.log(`Checking out to correct branch: ${branch}`);
-
-                            try {
-                                const localBranches = await git.branchLocal();
-                                const branchExists = localBranches.all.includes(branch);
-
-                                if (branchExists) {
-                                    await git.checkout(branch);
-                                    console.log(`Checked out to existing local branch: ${branch}`);
-                                } else {
-                                    await git.fetch(['origin']);
-                                    const remoteBranches = await git.branch(['-r']);
-                                    const remoteBranchExists = remoteBranches.all.includes(`origin/${branch}`);
-
-                                    if (remoteBranchExists) {
-                                        await git.checkout(branch);
-                                        console.log(`Checked out to remote branch: ${branch}`);
-                                    } else {
-                                        console.error(`Branch ${branch} not found locally or remotely!`);
-                                        vscode.window.showErrorMessage(`Không tìm thấy branch: ${branch}`);
-                                    }
-                                }
-                            } catch (checkoutError) {
-                                console.error('Failed to checkout branch:', checkoutError);
-                                vscode.window.showErrorMessage(`Lỗi chuyển branch: ${checkoutError}`);
-                            }
-                        } else {
-                            console.log(`Already on correct branch: ${branch}`);
-                        }
-
-                        const currentInfo = {
-                            assignmentCode: assignmentCode,
-                            repoUrl: repoUrl,
-                            branch: branch,
-                            token: savedToken,
-                            role: role,
-                            deadline: savedDeadline
-                        };
-
-                        await context.globalState.update('current_class', currentInfo);
-                        console.log('[DEBUG] Updated current_class in globalState');
-
-                        console.log('[DEBUG] Calling gitService.initializeWorkspace with:', {
-                            workspacePath,
-                            hasToken: !!savedToken,
-                            repoUrl,
-                            branch
-                        });
-                        await deps.gitService.initializeWorkspace(workspacePath, {
-                            token: savedToken,
-                            repoUrl: repoUrl,
-                            branch: branch
-                        });
-
-                        if (role === 'student' && assignmentCode) {
-                            deps.gitService.setClassInfo(deps.apiService, assignmentCode);
-                        }
-
-                        deps.gitService.enableAutoPush();
-
-                        console.log(`Git service restored: role=${role}, branch=${branch}, assignmentCode=${assignmentCode}, token exists: ${!!savedToken}`);
-                    } else {
-                        console.warn(`No GitHub token found for ${roleSpecificKey}, auto-push disabled`);
-                        await deps.gitService.initializeWorkspace(workspacePath);
-                    }
-                }
-            } catch (gitError) {
-                console.log('Not a git repository or git error:', gitError);
-            }
+        const assignmentCode = getCurrentAssignmentCodeFromWorkspace(context, userData.userId);
+        if (!assignmentCode) {
+            return;
         }
+
+        const baseDirectory = await ensureBaseDirectory(context, userData.userId);
+        if (!baseDirectory) {
+            return;
+        }
+
+        const roomData = getRoomData(baseDirectory, userData.userId, assignmentCode);
+        if (!roomData.found || !roomData.fullPath || !roomData.room) {
+            return;
+        }
+
+        const role = roomData.room.branchName === 'teacher' ? 'teacher' : 'student';
+        const roleSpecificKey = role === 'teacher'
+            ? `assignment_${assignmentCode}`
+            : `student_assignment_${assignmentCode}`;
+        const roleSpecificInfo = context.globalState.get<any>(roleSpecificKey) || {};
+        const currentClass = context.globalState.get<any>('current_class') || {};
+        const currentClassMatches = String(currentClass.assignmentCode || '') === String(assignmentCode);
+
+        await context.globalState.update('current_class', {
+            assignmentCode,
+            localPath: roomData.fullPath,
+            repoUrl: roomData.room.repoUrl,
+            branch: roomData.room.branchName,
+            token: roleSpecificInfo.token || (currentClassMatches ? currentClass.token : undefined),
+            role,
+            deadline: roleSpecificInfo.deadline || (currentClassMatches ? currentClass.deadline : undefined)
+        });
     } catch (error) {
-        console.error('Failed to restore git service state:', error);
+        console.error('[Runtime] Failed to restore runtime state:', error);
     }
 }
 
