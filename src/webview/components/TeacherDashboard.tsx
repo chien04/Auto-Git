@@ -9,6 +9,7 @@ import ChatWindow from './ChatWindow';
 import { MessageType } from '../services/websocketService';
 import Setting from './Setting';
 import uetLogo from '../assets/uet.jpg';
+import { UserMinus } from 'lucide-react';
 
 interface TeacherDashboardProps {
   vscode: any;
@@ -90,6 +91,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
           setSelectedClass(null);
           setStudents([]);
           break;
+        case 'studentRemoved':
+          setStudents((current) => current.filter((student) => student.studentId !== message.studentId));
+          vscode.postMessage({ type: 'loadMyClasses' });
+          if (message.classCode || selectedClass?.classCode) {
+            vscode.postMessage({ type: 'loadStudents', classCode: message.classCode || selectedClass?.classCode });
+          }
+          break;
       }
     };
 
@@ -112,6 +120,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
       type: 'deleteClass',
       classCode: classItem.classCode,
       className: classItem.className
+    });
+  };
+
+  const handleRemoveStudent = (student: Student) => {
+    if (!selectedClass) {
+      return;
+    }
+
+    vscode.postMessage({
+      type: 'removeStudent',
+      classCode: selectedClass.classCode,
+      studentId: student.studentId,
+      studentName: student.studentName
     });
   };
 
@@ -256,15 +277,30 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ vscode, user, apiSe
                 {students.length === 0 ? (
                   <p className="text-sm text-vscode-desc text-center py-8">Chưa có sinh viên nào tham gia</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="border-y border-solid border-[var(--vscode-panel-border)]">
                     {students.map((student) => (
                       <div
                         key={student.studentId}
-                        className="p-4 rounded-md border border-solid border-[var(--vscode-panel-border)] bg-[var(--vscode-editorWidget-background)] hover:border-[var(--vscode-focusBorder)] hover:bg-vscode-hoverBg transition-colors"
+                        className="group min-h-[44px] flex items-center gap-3 border-b border-solid border-[var(--vscode-panel-border)] last:border-b-0 hover:bg-vscode-hoverBg transition-colors"
                       >
-                        <div className="font-semibold text-vscode-fg text-sm mb-1">{student.studentName}</div>
-                        <div className="text-xs text-vscode-desc">
-                          Tham gia: {new Date(student.joinedAt).toLocaleDateString('vi-VN')}
+                        <div className="min-w-0 flex-1 py-3">
+                          <div className="font-semibold text-vscode-fg text-sm truncate">{student.studentName}</div>
+                        </div>
+                        <div className="flex items-center gap-2 py-3 pl-2">
+                          <span className="text-xs text-vscode-desc whitespace-nowrap">
+                            Tham gia: {new Date(student.joinedAt).toLocaleDateString('vi-VN')}
+                          </span>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRemoveStudent(student);
+                            }}
+                            className="cursor-pointer w-7 h-7 flex items-center justify-center rounded-sm text-vscode-desc opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-[var(--vscode-errorForeground)] hover:bg-vscode-bg transition-all"
+                            title="Xóa sinh viên khỏi lớp"
+                            aria-label={`Xóa sinh viên ${student.studentName} khỏi lớp`}
+                          >
+                            <UserMinus className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     ))}

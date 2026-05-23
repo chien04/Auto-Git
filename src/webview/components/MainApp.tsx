@@ -103,9 +103,6 @@ const MainApp: React.FC<MainAppProps> = ({ vscode }) => {
 
     return () => {
       window.removeEventListener('message', handleMessage);
-      // Don't disconnect WebSocket here - it's a singleton service
-      // that should persist across component re-renders.
-      // WebSocket will only disconnect on explicit logout.
     };
   }, []);
 

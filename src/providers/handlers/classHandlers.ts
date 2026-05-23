@@ -216,7 +216,9 @@ export async function handleRemoveStudent(
         vscode.window.showInformationMessage(`Đã xóa sinh viên ${studentName}`);
 
         postMessage({
-            type: 'studentRemoved'
+            type: 'studentRemoved',
+            classCode,
+            studentId
         });
     } catch (error: any) {
         vscode.window.showErrorMessage(`Lỗi xóa sinh viên: ${error.message}`);
