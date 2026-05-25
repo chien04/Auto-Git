@@ -1,71 +1,159 @@
-# auto-git README
+# Hướng Dẫn Cài Đặt Frontend
 
-This is the README for your extension "auto-git". After writing up a brief description, we recommend including the following sections.
 
-## Features
+## 1. Clone Repository Frontend
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+Chọn một thư mục làm việc:
 
-For example if there is an image subfolder under your extension project workspace:
+```powershell
+git clone https://github.com/chien04/Auto-Git.git
+```
 
-\!\[feature X\]\(images/feature-x.png\)
+## 2. Yêu Cầu Môi Trường
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Cài đặt trước:
 
-## Requirements
+| Thành phần | Phiên bản khuyến nghị | Mục đích |
+|---|---:|---|
+| Node.js | 18 trở lên | Build extension và React Webview |
+| npm | 9 trở lên | Cài thư viện frontend |
+| Git | Bản mới nhất | Clone repo và thao tác Git |
+| VS Code | Bản mới nhất | Chạy Extension Development Host |
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Kiểm tra:
 
-## Extension Settings
+```powershell
+node -v
+npm -v
+git -v
+code --version
+```
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## 3. Cài Dependency
 
-For example:
+Trong repo frontend:
 
-This extension contributes the following settings:
+```powershell
+cd Auto-Git
+npm install
+```
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## 4. Cấu Hình Kết Nối Backend
 
-## Known Issues
+Frontend mặc định gọi backend local:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+```text
+REST API: http://localhost:8080/api
+WebSocket: http://localhost:8080/ws-notifications
+```
 
-## Release Notes
+Các file đang cấu hình URL backend:
 
-Users appreciate release notes as you update your extension.
+```text
+src/extension.ts
+src/services/apiService.ts
+src/webview/services/websocketService.ts
+```
 
-### 1.0.0
+Nếu backend chạy ở host hoặc port khác, cập nhật các URL trong các file trên.
 
-Initial release of ...
+## 5. Build Extension Host
 
-### 1.0.1
+Biên dịch TypeScript của VS Code extension:
 
-Fixed issue #.
+```powershell
+cd Auto-Git
+npm run compile
+```
 
-### 1.1.0
+Output được tạo trong thư mục:
 
-Added features X, Y, and Z.
+```text
+out/
+```
 
----
+## 6. Build React Webview
 
-## Following extension guidelines
+Bundle giao diện React Webview:
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+```powershell
+cd Auto-Git
+npm run build:webview
+```
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+Output chính:
 
-## Working with Markdown
+```text
+out/webview/webview.js
+```
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+## 7. Chạy Frontend Trong VS Code
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+Mở repo frontend bằng VS Code:
 
-## For more information
+```powershell
+code Auto-Git
+```
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+Trong VS Code:
 
-**Enjoy!**
+1. Nhấn `F5`.
+2. Chọn cấu hình `Run Extension`.
+3. VS Code mở cửa sổ `Extension Development Host`.
+4. Trong cửa sổ mới, mở Activity Bar.
+5. Chọn `Auto Git Classroom`.
+
+Cấu hình debug nằm ở:
+
+```text
+.vscode/launch.json
+```
+
+## 8. Chạy Watch Mode Khi Phát Triển
+
+Mở hai terminal.
+
+Terminal 1, watch Extension Host:
+
+```powershell
+cd Auto-Git
+npm run watch
+```
+
+Terminal 2, watch React Webview:
+
+```powershell
+cd Auto-Git
+npm run watch:webview
+```
+
+Sau khi sửa code, reload cửa sổ Extension Development Host:
+
+```text
+Ctrl + R
+```
+
+## 9. Thứ Tự Chạy Frontend Với Backend
+
+Frontend cần backend đang chạy trước để đăng nhập, tạo lớp, tạo bài tập, chat, notification, run code và submit code.
+
+Thứ tự khuyến nghị:
+
+1. Chạy backend ở `http://localhost:8080`.
+2. Build frontend:
+
+```powershell
+cd Auto-Git
+npm run compile
+npm run build:webview
+```
+
+3. Mở repo frontend bằng VS Code:
+
+```powershell
+code Auto-Git
+```
+
+4. Nhấn `F5`.
+5. Sử dụng extension trong cửa sổ `Extension Development Host`.
+
