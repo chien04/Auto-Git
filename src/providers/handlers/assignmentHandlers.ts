@@ -249,21 +249,6 @@ export async function handleJoinAssignment(
     }
 }
 
-export async function handleViewAssignment(
-    deps: AssignmentHandlerDeps,
-    assignmentCode: string
-): Promise<void> {
-    try {
-        const students = await deps.apiService.getAssignmentStudents(assignmentCode);
-        deps.postMessage({
-            type: 'assignmentStudentsLoaded',
-            students
-        });
-    } catch (error: any) {
-        vscode.window.showErrorMessage(`Lỗi tải danh sách sinh viên: ${error.message}`);
-    }
-}
-
 export async function handleOpenAssignment(
     deps: AssignmentHandlerDeps,
     assignmentCode: string

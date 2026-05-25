@@ -77,6 +77,17 @@ export async function handleSubmitCode(
         return;
     }
 
+    const assignmentCode = getCurrentAssignmentCodeFromWorkspace(context, userId);
+    if (!assignmentCode) {
+        vscode.window.showErrorMessage('Không tìm thấy assignment hiện tại. Vui lòng mở đúng workspace bài tập.');
+        return;
+    }
+
+    const canSubmit = await ensureCanSubmitBeforeDeadline(apiService, context, assignmentCode);
+    if (!canSubmit) {
+        return;
+    }
+
     const answer = await vscode.window.showInformationMessage(
         'Bạn có chắc chắn muốn nộp bài tập này lên hệ thống?',
         'Có', 'Không'
@@ -102,7 +113,6 @@ export async function handleSubmitCode(
         if (match && match[1]) {
             currentTaskOrderNo = parseInt(match[1], 10);
         }
-        const assignmentCode = getCurrentAssignmentCodeFromWorkspace(context, userId);
 
         await vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
@@ -145,6 +155,49 @@ export async function handleSubmitCode(
             }
         });
     }
+}
+
+async function ensureCanSubmitBeforeDeadline(
+    apiService: ApiService,
+    context: vscode.ExtensionContext,
+    assignmentCode: string
+): Promise<boolean> {
+    const userData = context.globalState.get<any>('user_data') || {};
+    const currentClass = context.globalState.get<any>('current_class') || {};
+    const isTeacher = userData.role === 'TEACHER' || currentClass.role === 'teacher';
+
+    if (isTeacher) {
+        return true;
+    }
+
+    let deadlineValue: string | undefined;
+    try {
+        const assignment = await apiService.getAssignment(assignmentCode);
+        deadlineValue = assignment.deadline;
+    } catch (error: any) {
+        const errorMsg = error?.message || 'Không thể kiểm tra deadline.';
+        vscode.window.showErrorMessage(`Không thể kiểm tra deadline trước khi nộp bài: ${errorMsg}`);
+        return false;
+    }
+
+    if (!deadlineValue) {
+        return true;
+    }
+
+    const deadline = new Date(deadlineValue);
+    if (Number.isNaN(deadline.getTime())) {
+        vscode.window.showErrorMessage('Deadline của bài tập không hợp lệ. Không thể nộp bài.');
+        return false;
+    }
+
+    if (Date.now() > deadline.getTime()) {
+        vscode.window.showErrorMessage(
+            `Đã quá deadline (${deadline.toLocaleString('vi-VN')}). Bạn không thể nộp bài nữa.`
+        );
+        return false;
+    }
+
+    return true;
 }
 
 async function showResultInVirtualDocument(results: any[]) {

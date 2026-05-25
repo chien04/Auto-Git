@@ -836,7 +836,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
               <div
                 className={`rounded-xl px-3 py-2 text-[15px] leading-relaxed shadow-sm max-w-full overflow-hidden ${isOwnMessage
                   ? 'bg-vscode-iconBg text-vscode-fg shadow-[0_2px_8px_rgba(0,0,0,0.15)] border border-[var(--vscode-panel-border)]'
-                  : 'bg-vscode-iconBg text-vscode-fg shadow-[0_2px_8px_rgba(0,0,0,0.15)]'
+                  : 'bg-vscode-iconBg text-vscode-fg shadow-[0_2px_8px_rgba(0,0,0,0.15)] border border-[var(--vscode-panel-border)]'
                   }`}
                 title={formatTime(message.createdAt || message.sentAt || new Date().toISOString())}
               >

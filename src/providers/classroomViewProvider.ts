@@ -17,11 +17,6 @@ import {
     handleSearchChatMembers
 } from './handlers/chatHandlers';
 import {
-    handleCreateCodeComment,
-    handleGetCodeComments,
-    handleResolveCodeComment
-} from './handlers/commentHandlers';
-import {
     handleAskAiWithContext,
     handleGetCurrentWorkspace,
     handleOpenChatContextFile,
@@ -237,18 +232,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
                 await this._handleDeleteAssignment(message.assignmentCode, message.title);
                 break;
 
-            case 'createCodeComment':
-                await this._handleCreateCodeComment(message.payload);
-                break;
-
-            case 'getCodeComments':
-                await this._handleGetCodeComments(message.assignmentCode, message.targetBranch, message.studentFilePath);
-                break;
-
-            case 'resolveCodeComment':
-                await this._handleResolveCodeComment(message.commentId, message.assignmentCode, message.targetBranch, message.studentFilePath);
-                break;
-
             case 'getChatClassrooms':
                 await this._handleGetChatClassrooms();
                 break;
@@ -417,31 +400,6 @@ export class ClassroomViewProvider implements vscode.WebviewViewProvider {
 
     private async _handleDeleteAssignment(assignmentCode: string, title?: string) {
         await handleDeleteAssignment(this._getAssignmentHandlerDeps(), assignmentCode, title);
-    }
-
-    private async _handleCreateCodeComment(payload: any) {
-        await handleCreateCodeComment(this.apiService, payload, (message) => this._postMessage(message));
-    }
-
-    private async _handleGetCodeComments(assignmentCode: string, targetBranch: string, studentFilePath: string) {
-        await handleGetCodeComments(
-            this.apiService,
-            assignmentCode,
-            targetBranch,
-            studentFilePath,
-            (message) => this._postMessage(message)
-        );
-    }
-
-    private async _handleResolveCodeComment(commentId: number, assignmentCode: string, targetBranch: string, studentFilePath: string) {
-        await handleResolveCodeComment(
-            this.apiService,
-            commentId,
-            assignmentCode,
-            targetBranch,
-            studentFilePath,
-            (message) => this._postMessage(message)
-        );
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {

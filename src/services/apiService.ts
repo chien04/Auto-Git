@@ -49,6 +49,16 @@ export interface JoinAssignmentResponse {
     deadline?: string;
 }
 
+export interface AssignmentInfoResponse {
+    assignmentId: string | number;
+    assignmentCode: string;
+    title: string;
+    description?: string;
+    repoUrl?: string;
+    deadline?: string;
+    createdAt?: string;
+}
+
 export interface CreateCodeCommentRequest {
     assignmentCode: string;
     targetBranch: string;
@@ -339,6 +349,15 @@ export class ApiService {
         }
     }
 
+    async getAssignment(assignmentCode: string): Promise<AssignmentInfoResponse> {
+        try {
+            const response = await this.api.get(`/assignment/${assignmentCode}`);
+            return response.data;
+        } catch (error: any) {
+            throw new Error(`Failed to get assignment: ${error.response?.data?.message || error.response?.data?.error || error.message}`);
+        }
+    }
+
     async getAssignmentStudents(assignmentCode: string): Promise<any[]> {
         try {
             const response = await this.api.get(`/assignment/${assignmentCode}/students`);
@@ -423,21 +442,6 @@ export class ApiService {
         } catch (error: any) {
             console.error('[API] Remove student error:', error);
             throw new Error(`Failed to remove student: ${error.response?.data?.error || error.message}`);
-        }
-    }
-
-    async checkDeadline(assignmentCode: string): Promise<{
-        hasDeadline: boolean;
-        deadline?: string;
-        canPush: boolean;
-        message: string;
-    }> {
-        try {
-            const response = await this.api.get(`/assignment/${assignmentCode}/deadline/check`);
-            return response.data;
-        } catch (error: any) {
-            console.error('[API] Check deadline error:', error);
-            throw new Error(`Failed to check deadline: ${error.response?.data?.error || error.message}`);
         }
     }
 

@@ -177,7 +177,7 @@ const StudentResultView: React.FC<StudentResultViewProps> = ({
                                                 className="text-[15px] font-bold text-vscode-fg mb-0.5 truncate block"
                                                 title={`Task ${task.taskOrderNo}: ${task.taskName}`} // Hover chuột vào sẽ hiện tên đầy đủ
                                             >
-                                                Task {task.taskOrderNo}: {task.taskName}
+                                                Câu {task.taskOrderNo}: {task.taskName}
                                             </h4>
                                             <p className="text-[11px] font-medium text-vscode-desc">
                                                 {totalAttempts > 0 ? `Đã nộp ${totalAttempts} lần` : 'Chưa nộp bài'}
@@ -242,7 +242,7 @@ const StudentResultView: React.FC<StudentResultViewProps> = ({
                                                 })
                                             ) : (
                                                 <div className="p-6 text-center text-sm font-medium text-vscode-desc">
-                                                    Chưa có lịch sử nộp bài cho task này.
+                                                    Chưa có lịch sử nộp bài cho câu này.
                                                 </div>
                                             )}
                                         </div>
